@@ -14,11 +14,29 @@ categories = ["command-line-utilities", "filesystem"]
 name = "synchrogit"
 path = "src/main.rs"
 
+[lib]
+name = "synchrogit"
+path = "src/lib.rs"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
 
 [dependencies]
+tokio = { version = "1.42", features = ["rt-multi-thread", "macros", "fs", "process", "signal", "sync", "time", "io-util"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-journald = "0.3"
+anyhow = "1.0"
+thiserror = "2.0"
+gethostname = "0.5"
+time = { version = "0.3", features = ["formatting", "local-offset", "macros"] }
+once_cell = "1.20"
+notify = "8.0"
+humantime = "2.1"
 
 [dev-dependencies]
+tempfile = "3.13"
