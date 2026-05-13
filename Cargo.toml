@@ -1,0 +1,24 @@
+[package]
+name = "synchrogit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+description = "Daemon that keeps git repositories synced with their remotes"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/partanskiy/synchrogit"
+readme = "README.md"
+keywords = ["git", "sync", "daemon", "obsidian", "notes"]
+categories = ["command-line-utilities", "filesystem"]
+
+[[bin]]
+name = "synchrogit"
+path = "src/main.rs"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+[dependencies]
+
+[dev-dependencies]
