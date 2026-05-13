@@ -1,0 +1,39 @@
+name: commitlint
+
+on:
+  pull_request:
+
+jobs:
+  validate:
+    name: validate commit messages
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check every commit in the PR
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          conv='^(feat|fix|refactor|docs|test|chore|perf|build|ci|style|revert)(\([a-z0-9._/-]+\))?!?: .+'
+          rel='^release: v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+
+          fail=0
+          # %H<TAB>%s — hash, tab, subject. -z makes per-record NUL-terminator.
+          while IFS=$'\t' read -r -d '' sha subject; do
+              case "$subject" in
+                  "Merge "*|"Revert "*|"fixup! "*|"squash! "*|"amend! "*) continue ;;
+                  "") echo "::error::commit $sha has empty subject"; fail=1; continue ;;
+              esac
+              if [[ "$subject" =~ $conv ]] || [[ "$subject" =~ $rel ]]; then
+                  echo "ok  $sha  $subject"
+              else
+                  echo "::error::commit $sha has invalid subject: $subject"
+                  fail=1
+              fi
+          done < <(git log -z --format='%H%x09%s' "$BASE..$HEAD")
+
+          exit "$fail"

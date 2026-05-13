@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Enforces Conventional Commits plus the custom `release: vX.Y.Z` type used in
+# this repo. The same regexes run in CI via .github/workflows/commitlint.yml.
+set -euo pipefail
+
+msg_file="${1:?missing commit-message file argument}"
+first_line=$(head -n1 -- "$msg_file")
+
+# Skip messages produced automatically by git itself.
+case "$first_line" in
+    "Merge "*|"Revert "*|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
+    "") echo "commit-msg: message is empty" >&2; exit 1 ;;
+esac
+
+conv='^(feat|fix|refactor|docs|test|chore|perf|build|ci|style|revert)(\([a-z0-9._/-]+\))?!?: .+'
+rel='^release: v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+
+if [[ "$first_line" =~ $conv ]] || [[ "$first_line" =~ $rel ]]; then
+    exit 0
+fi
+
+cat >&2 <<EOF
+commit-msg: rejected
+
+Subject: $first_line
+
+Expected one of:
+  <type>[(scope)][!]: <description>
+    types: feat fix refactor docs test chore perf build ci style revert
+  release: vX.Y.Z[-pre][+build]
+EOF
+exit 1
