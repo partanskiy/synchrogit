@@ -17,9 +17,10 @@ Local development is proceeding in small PR-sized commits. The current binary su
 - multi-repo TOML config loading
 - per-repo filesystem watch + timer-driven sync loop
 - local commit, fetch/pull, push, and keep-remote conflict handling
-- Unix-socket control commands: `status`, `sync`, and a wired `reload` placeholder
+- Unix-socket control commands: `status`, `sync`, and `reload`
+- config hot reload when `config.toml` is edited or atomically replaced
 
-Hot config reload and richer per-repo state land in later milestones.
+Richer per-repo state lands in later milestones.
 
 ## Configuration
 
@@ -58,6 +59,7 @@ synchrogit run
 synchrogit status
 synchrogit sync
 synchrogit sync notes
+synchrogit reload
 ```
 
 The daemon listens on `$XDG_RUNTIME_DIR/synchrogit.sock`. If `XDG_RUNTIME_DIR` is unset, it falls back to `/tmp/synchrogit-$UID.sock`. Override the path with `--socket` or `SYNCHROGIT_SOCKET`.

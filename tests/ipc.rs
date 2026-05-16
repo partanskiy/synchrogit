@@ -2,7 +2,7 @@ use std::path::Path;
 use std::process::Command;
 
 use synchrogit::clock;
-use synchrogit::config::parse_str;
+use synchrogit::config::load_from_path;
 use synchrogit::ipc::client;
 use synchrogit::ipc::protocol::{Request, Response};
 use synchrogit::ipc::server;
@@ -16,8 +16,11 @@ async fn ipc_status_sync_and_reload_roundtrip() {
     let repo = tmp.path().join("repo");
     init_repo(&repo);
 
-    let config = parse_str(&format!(
-        r#"
+    let config_path = tmp.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        format!(
+            r#"
 [defaults]
 interval = "1h"
 debounce = "10ms"
@@ -28,11 +31,12 @@ auto-push = false
 name = "repo"
 path = "{}"
 "#,
-        toml_path(&repo),
-    ))
+            toml_path(&repo),
+        ),
+    )
     .unwrap();
 
-    let supervisor = Supervisor::spawn(config).unwrap();
+    let supervisor = Supervisor::spawn_loaded(load_from_path(&config_path).unwrap()).unwrap();
     let cancel = CancellationToken::new();
     let socket = tmp.path().join("synchrogit.sock");
     let ipc = server::spawn(socket.clone(), supervisor.control(), cancel.clone())
@@ -75,8 +79,8 @@ path = "{}"
     assert_eq!(
         client::request(&socket, Request::Reload).await.unwrap(),
         Response::Reloaded {
-            ok: false,
-            message: "manual reload lands with the config hot-reload milestone".to_string(),
+            ok: true,
+            message: "reloaded config: 0 added, 0 removed, 0 restarted, 1 unchanged".to_string(),
         }
     );
 

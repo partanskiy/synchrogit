@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use tokio_util::sync::CancellationToken;
 
-use crate::config::{load, load_from_path};
+use crate::config::{load, load_from_path, watcher};
 use crate::ipc::protocol::{Request, Response};
 use crate::ipc::{client, default_socket_path, server};
-use crate::runtime::Supervisor;
+use crate::runtime::{Supervisor, SupervisorControl};
 
 #[derive(Debug, Parser)]
 #[command(name = "synchrogit", version, about, long_about = None)]
@@ -74,22 +74,26 @@ async fn run(args: RunArgs) -> anyhow::Result<()> {
         Some(path) => load_from_path(path)?,
         None => load()?,
     };
+    let config_path = loaded.path.clone();
     let repo_count = loaded.config.repos.len();
     tracing::info!(
-        config = %loaded.path.display(),
+        config = %config_path.display(),
         repos = repo_count,
         "config loaded"
     );
-    let supervisor = Supervisor::spawn(loaded.config)?;
+    let supervisor = Supervisor::spawn_loaded(loaded)?;
     let socket = args.socket.unwrap_or_else(default_socket_path);
     let cancel = CancellationToken::new();
-    let ipc = server::spawn(socket, supervisor.control(), cancel.clone()).await?;
-    wait_for_shutdown(supervisor, ipc, cancel).await
+    let control = supervisor.control();
+    let ipc = server::spawn(socket, control.clone(), cancel.clone()).await?;
+    let reload_watcher = spawn_reload_watcher(config_path, control, cancel.clone());
+    wait_for_shutdown(supervisor, ipc, reload_watcher, cancel).await
 }
 
 async fn wait_for_shutdown(
     supervisor: Supervisor,
     ipc: server::ServerHandle,
+    reload_watcher: tokio::task::JoinHandle<()>,
     cancel: CancellationToken,
 ) -> anyhow::Result<()> {
     use tokio::signal::unix::{SignalKind, signal};
@@ -102,8 +106,42 @@ async fn wait_for_shutdown(
     tracing::info!("shutting down");
     cancel.cancel();
     let _ = ipc.join.await;
+    let _ = reload_watcher.await;
     supervisor.shutdown().await;
     Ok(())
+}
+
+fn spawn_reload_watcher(
+    config_path: PathBuf,
+    control: SupervisorControl,
+    cancel: CancellationToken,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut watcher = match watcher::spawn(&config_path) {
+            Ok(watcher) => watcher,
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    config = %config_path.display(),
+                    "config watcher disabled"
+                );
+                return;
+            }
+        };
+
+        loop {
+            tokio::select! {
+                biased;
+                _ = cancel.cancelled() => break,
+                Some(_) = watcher.rx.recv() => {
+                    match control.reload().await {
+                        Ok(report) => tracing::info!(message = %report.message(), "config reloaded"),
+                        Err(e) => tracing::warn!(error = %e, "config reload failed; keeping previous config"),
+                    }
+                }
+            }
+        }
+    })
 }
 
 async fn request_and_print(socket: Option<PathBuf>, request: Request) -> anyhow::Result<()> {
