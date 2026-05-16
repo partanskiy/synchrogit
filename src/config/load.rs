@@ -106,6 +106,8 @@ struct RawConfig {
 struct RawDefaultsConfig {
     interval: Option<String>,
     debounce: Option<String>,
+    backoff_min: Option<String>,
+    backoff_max: Option<String>,
     commit_template: Option<String>,
     conflict_policy: Option<ConflictPolicy>,
     auto_push: Option<bool>,
@@ -137,6 +139,16 @@ impl TryFrom<RawConfig> for Config {
                 .unwrap_or(DefaultsConfig::default().interval),
             debounce: parse_duration_opt(raw.defaults.debounce.as_deref(), "defaults.debounce")?
                 .unwrap_or(DefaultsConfig::default().debounce),
+            backoff_min: parse_duration_opt(
+                raw.defaults.backoff_min.as_deref(),
+                "defaults.backoff-min",
+            )?
+            .unwrap_or(DefaultsConfig::default().backoff_min),
+            backoff_max: parse_duration_opt(
+                raw.defaults.backoff_max.as_deref(),
+                "defaults.backoff-max",
+            )?
+            .unwrap_or(DefaultsConfig::default().backoff_max),
             commit_template: raw
                 .defaults
                 .commit_template

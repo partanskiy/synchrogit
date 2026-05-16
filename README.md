@@ -19,8 +19,7 @@ Local development is proceeding in small PR-sized commits. The current binary su
 - local commit, fetch/pull, push, and keep-remote conflict handling
 - Unix-socket control commands: `status`, `sync`, and `reload`
 - config hot reload when `config.toml` is edited or atomically replaced
-
-Richer per-repo state lands in later milestones.
+- structured per-repo status with branch, upstream, last sync result, and failure count
 
 ## Configuration
 
@@ -36,7 +35,9 @@ Use `synchrogit run --config ./config.toml` to point at a specific file.
 [defaults]
 interval = "15s"
 debounce = "2s"
-commit-template = "{{date}} ({{host}})"
+backoff-min = "15s"
+backoff-max = "5m"
+commit-template = "{ts} ({host})"
 auto-pull = true
 auto-push = true
 
@@ -50,7 +51,7 @@ path = "~/.local/share/agent-wiki"
 interval = "30s"
 ```
 
-Repo names must be unique. Paths may use `~` and environment variables, but must be absolute after expansion.
+Repo names must be unique. Paths may use `~` and environment variables, but must be absolute after expansion. Commit templates can use `{ts}` and `{host}`. `backoff-min` must be greater than zero, and `backoff-max` must be greater than or equal to `backoff-min`.
 
 ## Usage
 
@@ -63,6 +64,8 @@ synchrogit reload
 ```
 
 The daemon listens on `$XDG_RUNTIME_DIR/synchrogit.sock`. If `XDG_RUNTIME_DIR` is unset, it falls back to `/tmp/synchrogit-$UID.sock`. Override the path with `--socket` or `SYNCHROGIT_SOCKET`.
+
+`status` prints one tab-separated line per repo with the repo path, current branch, upstream, running flag, last outcome, consecutive failure count, and last error. Timer-triggered cycles use exponential backoff after failures; filesystem changes and manual `sync` commands can still trigger work immediately.
 
 ## Building
 

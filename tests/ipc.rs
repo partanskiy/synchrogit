@@ -7,6 +7,7 @@ use synchrogit::ipc::client;
 use synchrogit::ipc::protocol::{Request, Response};
 use synchrogit::ipc::server;
 use synchrogit::runtime::Supervisor;
+use synchrogit::state::SyncOutcome;
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
@@ -43,15 +44,22 @@ path = "{}"
         .await
         .unwrap();
 
-    assert_eq!(
-        client::request(&socket, Request::Status).await.unwrap(),
-        Response::Status {
-            repos: vec![synchrogit::ipc::protocol::RepoStatus {
-                name: "repo".to_string(),
-                path: repo.display().to_string(),
-            }],
+    let status = wait_for_status_cycle(&socket).await;
+    match status {
+        Response::Status { repos } => {
+            assert_eq!(repos.len(), 1);
+            assert_eq!(repos[0].name, "repo");
+            assert_eq!(repos[0].path, repo.display().to_string());
+            assert_eq!(repos[0].current_branch.as_deref(), Some("main"));
+            assert!(repos[0].upstream.is_none());
+            assert!(!repos[0].running);
+            assert_eq!(repos[0].last_sync.last_outcome, SyncOutcome::NoOp);
+            assert_eq!(repos[0].last_sync.consecutive_failures, 0);
+            assert!(repos[0].last_sync.last_error.is_none());
+            assert!(repos[0].last_sync.last_cycle_at.is_some());
         }
-    );
+        other => panic!("unexpected status response: {other:?}"),
+    }
 
     assert_eq!(
         client::request(&socket, Request::Sync { repo: None })
@@ -88,6 +96,22 @@ path = "{}"
     let _ = ipc.join.await;
     supervisor.shutdown().await;
     assert!(!socket.exists(), "ipc socket should be cleaned up");
+}
+
+async fn wait_for_status_cycle(socket: &Path) -> Response {
+    for _ in 0..50 {
+        let response = client::request(socket, Request::Status).await.unwrap();
+        if let Response::Status { repos } = &response
+            && repos
+                .first()
+                .is_some_and(|repo| repo.last_sync.last_cycle_at.is_some())
+        {
+            return response;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+
+    client::request(socket, Request::Status).await.unwrap()
 }
 
 fn init_repo(path: &Path) {
