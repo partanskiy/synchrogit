@@ -27,6 +27,8 @@ strip = "symbols"
 tokio = { version = "1.42", features = ["rt-multi-thread", "macros", "fs", "process", "signal", "sync", "time", "io-util"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 clap = { version = "4.5", features = ["derive", "env"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-journald = "0.3"
@@ -37,6 +39,7 @@ time = { version = "0.3", features = ["formatting", "local-offset", "macros"] }
 once_cell = "1.20"
 notify = "8.0"
 humantime = "2.1"
+shellexpand = "3.1"
 
 [dev-dependencies]
 tempfile = "3.13"

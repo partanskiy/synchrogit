@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -14,6 +16,18 @@ pub enum SynchrogitError {
 
     #[error("filesystem watcher error: {0}")]
     Watch(#[from] notify::Error),
+
+    #[error("config file not found; checked: {checked}")]
+    ConfigNotFound { checked: String },
+
+    #[error("failed to read config {path}: {source}")]
+    ConfigRead {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+
+    #[error("invalid config: {0}")]
+    Config(String),
 
     #[error("{0}")]
     Other(String),
