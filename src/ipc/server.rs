@@ -125,9 +125,15 @@ async fn handle_request(request: Request, control: &SupervisorControl) -> Respon
             Ok(queued) => Response::Synced { queued },
             Err(e) => Response::error(e),
         },
-        Request::Reload => Response::Reloaded {
-            ok: false,
-            message: "manual reload lands with the config hot-reload milestone".to_string(),
+        Request::Reload => match control.reload().await {
+            Ok(report) => Response::Reloaded {
+                ok: true,
+                message: report.message(),
+            },
+            Err(e) => Response::Reloaded {
+                ok: false,
+                message: e,
+            },
         },
     }
 }
