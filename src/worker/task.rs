@@ -30,6 +30,8 @@ pub fn spawn(cfg: WorkerConfig) -> Result<WorkerHandle> {
     let (kick_tx, kick_rx) = mpsc::channel::<KickReason>(8);
     let cancel_inner = cancel.clone();
     let name = cfg.name.clone();
+    let handle_name = cfg.name.clone();
+    let handle_path = cfg.path.clone();
 
     let join = tokio::spawn(async move {
         let span = info_span!("repo", name = %name);
@@ -43,6 +45,8 @@ pub fn spawn(cfg: WorkerConfig) -> Result<WorkerHandle> {
     });
 
     Ok(WorkerHandle {
+        name: handle_name,
+        path: handle_path,
         cancel,
         kick_tx,
         join,
