@@ -12,6 +12,20 @@ impl Git {
         self.try_run(["rev-parse", "--abbrev-ref", "@{u}"]).await
     }
 
+    pub async fn current_branch(&self) -> Result<String> {
+        Ok(self
+            .run(["symbolic-ref", "--short", "HEAD"])
+            .await?
+            .stdout_trim())
+    }
+
+    pub async fn upstream_name(&self) -> Result<String> {
+        Ok(self
+            .run(["rev-parse", "--abbrev-ref", "@{u}"])
+            .await?
+            .stdout_trim())
+    }
+
     pub async fn git_dir(&self) -> Result<PathBuf> {
         let out = self.run(["rev-parse", "--git-dir"]).await?;
         Ok(self.repo.join(out.stdout_trim()))

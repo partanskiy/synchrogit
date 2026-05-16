@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::state::SyncOutcome;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum Request {
@@ -23,6 +25,21 @@ pub enum Response {
 pub struct RepoStatus {
     pub name: String,
     pub path: String,
+    pub current_branch: Option<String>,
+    pub upstream: Option<String>,
+    pub running: bool,
+    pub last_sync: LastSyncStatus,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LastSyncStatus {
+    pub committed_at: Option<String>,
+    pub pulled_at: Option<String>,
+    pub pushed_at: Option<String>,
+    pub last_cycle_at: Option<String>,
+    pub last_outcome: SyncOutcome,
+    pub last_error: Option<String>,
+    pub consecutive_failures: u32,
 }
 
 impl Response {

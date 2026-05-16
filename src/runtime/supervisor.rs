@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::config::{Config, LoadedConfig, ResolvedRepoConfig, load_from_path};
 use crate::error::Result;
-use crate::ipc::protocol::RepoStatus;
+use crate::ipc::protocol::{LastSyncStatus, RepoStatus};
 use crate::worker::{KickReason, WorkerHandle, spawn};
 
 pub struct Supervisor {
@@ -101,9 +101,24 @@ impl SupervisorControl {
             .expect("supervisor lock poisoned")
             .workers
             .values()
-            .map(|slot| RepoStatus {
-                name: slot.config.name.clone(),
-                path: slot.config.path.display().to_string(),
+            .map(|slot| {
+                let state = slot.handle.state_rx.borrow().clone();
+                RepoStatus {
+                    name: state.name,
+                    path: state.path.display().to_string(),
+                    current_branch: state.current_branch,
+                    upstream: state.upstream,
+                    running: state.running,
+                    last_sync: LastSyncStatus {
+                        committed_at: state.last_sync.committed_at,
+                        pulled_at: state.last_sync.pulled_at,
+                        pushed_at: state.last_sync.pushed_at,
+                        last_cycle_at: state.last_sync.last_cycle_at,
+                        last_outcome: state.last_sync.last_outcome,
+                        last_error: state.last_sync.last_error,
+                        consecutive_failures: state.last_sync.consecutive_failures,
+                    },
+                }
             })
             .collect()
     }

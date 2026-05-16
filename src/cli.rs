@@ -157,7 +157,17 @@ fn print_response(response: Response) -> anyhow::Result<()> {
         }
         Response::Status { repos } => {
             for repo in repos {
-                println!("{}\t{}", repo.name, repo.path);
+                println!(
+                    "{}\t{}\tbranch={}\tupstream={}\trunning={}\toutcome={}\tfailures={}\terror={}",
+                    repo.name,
+                    repo.path,
+                    repo.current_branch.as_deref().unwrap_or("-"),
+                    repo.upstream.as_deref().unwrap_or("-"),
+                    repo.running,
+                    repo.last_sync.last_outcome,
+                    repo.last_sync.consecutive_failures,
+                    repo.last_sync.last_error.as_deref().unwrap_or("-"),
+                );
             }
         }
         Response::Reloaded { ok, message } => {

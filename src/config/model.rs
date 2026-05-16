@@ -10,6 +10,8 @@ use crate::worker::WorkerConfig;
 
 pub const DEFAULT_INTERVAL: Duration = Duration::from_secs(15);
 pub const DEFAULT_DEBOUNCE: Duration = Duration::from_secs(2);
+pub const DEFAULT_BACKOFF_MIN: Duration = Duration::from_secs(15);
+pub const DEFAULT_BACKOFF_MAX: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
@@ -35,6 +37,16 @@ impl Config {
         if self.repos.is_empty() {
             return Err(SynchrogitError::Config(
                 "at least one [[repo]] entry is required".into(),
+            ));
+        }
+        if self.defaults.backoff_min.is_zero() {
+            return Err(SynchrogitError::Config(
+                "defaults.backoff-min must be greater than zero".into(),
+            ));
+        }
+        if self.defaults.backoff_max < self.defaults.backoff_min {
+            return Err(SynchrogitError::Config(
+                "defaults.backoff-max must be greater than or equal to defaults.backoff-min".into(),
             ));
         }
 
@@ -67,6 +79,8 @@ impl Config {
 pub struct DefaultsConfig {
     pub interval: Duration,
     pub debounce: Duration,
+    pub backoff_min: Duration,
+    pub backoff_max: Duration,
     pub commit_template: String,
     pub conflict_policy: ConflictPolicy,
     pub auto_push: bool,
@@ -78,6 +92,8 @@ impl Default for DefaultsConfig {
         Self {
             interval: DEFAULT_INTERVAL,
             debounce: DEFAULT_DEBOUNCE,
+            backoff_min: DEFAULT_BACKOFF_MIN,
+            backoff_max: DEFAULT_BACKOFF_MAX,
             commit_template: DEFAULT_COMMIT_TEMPLATE.to_string(),
             conflict_policy: ConflictPolicy::KeepRemote,
             auto_push: true,
@@ -109,6 +125,8 @@ impl RepoConfig {
             remote: self.remote.clone(),
             interval: self.interval.unwrap_or(defaults.interval),
             debounce: self.debounce.unwrap_or(defaults.debounce),
+            backoff_min: defaults.backoff_min,
+            backoff_max: defaults.backoff_max,
             commit_template: self
                 .commit_template
                 .clone()
@@ -129,6 +147,8 @@ pub struct ResolvedRepoConfig {
     pub remote: Option<String>,
     pub interval: Duration,
     pub debounce: Duration,
+    pub backoff_min: Duration,
+    pub backoff_max: Duration,
     pub commit_template: String,
     pub conflict_policy: ConflictPolicy,
     pub auto_push: bool,
@@ -143,6 +163,8 @@ impl From<&ResolvedRepoConfig> for WorkerConfig {
             path: repo.path.clone(),
             interval: repo.interval,
             debounce: repo.debounce,
+            backoff_min: repo.backoff_min,
+            backoff_max: repo.backoff_max,
             commit_template: repo.commit_template.clone(),
             auto_push: repo.auto_push,
             auto_pull: repo.auto_pull,
