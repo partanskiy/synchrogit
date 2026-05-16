@@ -12,7 +12,13 @@ pub enum SynchrogitError {
     },
 
     #[error("failed to spawn git: {0}")]
-    GitSpawn(#[from] std::io::Error),
+    GitSpawn(std::io::Error),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
 
     #[error("filesystem watcher error: {0}")]
     Watch(#[from] notify::Error),

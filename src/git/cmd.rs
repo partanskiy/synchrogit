@@ -55,7 +55,7 @@ impl Git {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let output = cmd.output().await?;
+        let output = cmd.output().await.map_err(SynchrogitError::GitSpawn)?;
         if !output.status.success() {
             return Err(SynchrogitError::GitFailed {
                 args: pretty,

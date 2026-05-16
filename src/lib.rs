@@ -7,6 +7,7 @@ pub mod clock;
 pub mod config;
 pub mod error;
 pub mod git;
+pub mod ipc;
 pub mod log_setup;
 pub mod runtime;
 pub mod state;

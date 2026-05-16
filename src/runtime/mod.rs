@@ -1,3 +1,3 @@
 pub mod supervisor;
 
-pub use supervisor::Supervisor;
+pub use supervisor::{Supervisor, SupervisorControl};

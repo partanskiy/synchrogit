@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -9,6 +11,8 @@ pub enum KickReason {
 }
 
 pub struct WorkerHandle {
+    pub name: String,
+    pub path: PathBuf,
     pub cancel: CancellationToken,
     pub kick_tx: mpsc::Sender<KickReason>,
     pub join: JoinHandle<()>,
