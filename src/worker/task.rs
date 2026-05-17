@@ -25,9 +25,13 @@ pub struct WorkerConfig {
     pub debounce: Duration,
     pub backoff_min: Duration,
     pub backoff_max: Duration,
+    pub git_timeout: Duration,
+    pub branch: Option<String>,
+    pub remote: Option<String>,
     pub commit_template: String,
     pub auto_push: bool,
     pub auto_pull: bool,
+    pub ignore: Vec<String>,
 }
 
 pub fn spawn(cfg: WorkerConfig) -> Result<WorkerHandle> {
@@ -67,7 +71,7 @@ async fn run(
     mut kick_rx: mpsc::Receiver<KickReason>,
     state_tx: watch::Sender<RepoState>,
 ) -> Result<()> {
-    let git = Git::new(&cfg.path);
+    let git = Git::with_timeout(&cfg.path, cfg.git_timeout);
     let mut fs = fs_watch::spawn(&cfg.path)?;
     let lock = Arc::new(Mutex::new(()));
     let mut state = state_tx.borrow().clone();
@@ -129,6 +133,9 @@ async fn do_cycle(
         commit_template: &cfg.commit_template,
         auto_push: cfg.auto_push,
         auto_pull: cfg.auto_pull,
+        branch: cfg.branch.as_deref(),
+        remote: cfg.remote.as_deref(),
+        ignore: &cfg.ignore,
     };
     let report = sync_cycle(git, &params).await;
     let outcome = report.summary();
@@ -202,9 +209,13 @@ mod tests {
             debounce: Duration::from_secs(2),
             backoff_min: Duration::from_secs(10),
             backoff_max: Duration::from_secs(60),
+            git_timeout: Duration::from_secs(60),
+            branch: None,
+            remote: None,
             commit_template: "{ts} ({host})".to_string(),
             auto_push: true,
             auto_pull: true,
+            ignore: Vec::new(),
         }
     }
 

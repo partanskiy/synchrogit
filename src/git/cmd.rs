@@ -1,15 +1,20 @@
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::time::Duration;
 
 use tokio::process::Command;
+use tokio::time::timeout;
 use tracing::trace;
 
 use crate::error::{Result, SynchrogitError};
 
+pub const DEFAULT_GIT_TIMEOUT: Duration = Duration::from_secs(60);
+
 #[derive(Debug, Clone)]
 pub struct Git {
     pub repo: PathBuf,
+    timeout: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -26,7 +31,18 @@ impl GitOutput {
 
 impl Git {
     pub fn new(repo: impl Into<PathBuf>) -> Self {
-        Self { repo: repo.into() }
+        Self::with_timeout(repo, DEFAULT_GIT_TIMEOUT)
+    }
+
+    pub fn with_timeout(repo: impl Into<PathBuf>, timeout: Duration) -> Self {
+        Self {
+            repo: repo.into(),
+            timeout,
+        }
+    }
+
+    pub fn timeout(&self) -> Duration {
+        self.timeout
     }
 
     /// Run `git <args>` against the configured repo path and return its output.
@@ -54,8 +70,15 @@ impl Git {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        cmd.kill_on_drop(true);
 
-        let output = cmd.output().await.map_err(SynchrogitError::GitSpawn)?;
+        let output = timeout(self.timeout, cmd.output())
+            .await
+            .map_err(|_| SynchrogitError::GitTimeout {
+                args: pretty.clone(),
+                timeout: self.timeout,
+            })?
+            .map_err(SynchrogitError::GitSpawn)?;
         if !output.status.success() {
             return Err(SynchrogitError::GitFailed {
                 args: pretty,

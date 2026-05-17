@@ -1,8 +1,8 @@
-use std::path::Path;
 use std::process::Stdio;
 
 use tokio::fs;
 use tokio::process::Command;
+use tokio::time::timeout;
 use tracing::info;
 
 use super::cmd::Git;
@@ -35,7 +35,7 @@ pub async fn resolve_conflicts(git: &Git, template: &str, host: &str) -> Result<
         // added-by-them / deleted-by-us) have no `:2:` entry; tolerate by
         // skipping the copy but still resolving the conflict.
         let mut copy_written = false;
-        if let Ok(local_bytes) = capture_show(&git.repo, &format!(":2:{f}")).await {
+        if let Ok(local_bytes) = capture_show(git, &format!(":2:{f}")).await {
             let copy_abs = git.repo.join(&copy_rel);
             if let Some(parent) = copy_abs.parent() {
                 let _ = fs::create_dir_all(parent).await;
@@ -63,15 +63,22 @@ pub async fn resolve_conflicts(git: &Git, template: &str, host: &str) -> Result<
     Ok(saved)
 }
 
-async fn capture_show(repo: &Path, spec: &str) -> Result<Vec<u8>> {
+async fn capture_show(git: &Git, spec: &str) -> Result<Vec<u8>> {
     let mut cmd = Command::new("git");
     cmd.arg("-C")
-        .arg(repo)
+        .arg(&git.repo)
         .args(["show", spec])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let out = cmd.output().await?;
+    cmd.kill_on_drop(true);
+    let out = timeout(git.timeout(), cmd.output())
+        .await
+        .map_err(|_| SynchrogitError::GitTimeout {
+            args: vec!["show".to_string(), spec.to_string()],
+            timeout: git.timeout(),
+        })?
+        .map_err(SynchrogitError::GitSpawn)?;
     if out.status.success() {
         Ok(out.stdout)
     } else {

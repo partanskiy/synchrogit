@@ -108,6 +108,7 @@ struct RawDefaultsConfig {
     debounce: Option<String>,
     backoff_min: Option<String>,
     backoff_max: Option<String>,
+    git_timeout: Option<String>,
     commit_template: Option<String>,
     conflict_policy: Option<ConflictPolicy>,
     auto_push: Option<bool>,
@@ -149,6 +150,11 @@ impl TryFrom<RawConfig> for Config {
                 "defaults.backoff-max",
             )?
             .unwrap_or(DefaultsConfig::default().backoff_max),
+            git_timeout: parse_duration_opt(
+                raw.defaults.git_timeout.as_deref(),
+                "defaults.git-timeout",
+            )?
+            .unwrap_or(DefaultsConfig::default().git_timeout),
             commit_template: raw
                 .defaults
                 .commit_template
