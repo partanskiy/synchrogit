@@ -57,4 +57,4 @@ All four must pass for CI to be green.
 
 ## Releasing
 
-See [`RELEASING.md`](RELEASING.md) (lands with the release pipeline in a later PR).
+See [`RELEASING.md`](RELEASING.md). The release automation itself lands with the release pipeline in a later PR.

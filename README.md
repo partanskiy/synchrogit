@@ -81,6 +81,24 @@ cargo build --locked --release
 
 Requires Rust 1.94+ (edition 2024) and a recent `git` on PATH.
 
+## Packaging
+
+Package/install assets live under `packaging/`:
+
+- `packaging/synchrogit.service` is a systemd user service.
+- `packaging/config.example.toml` is a complete example config.
+
+For a manual local install, copy the example config to `~/.config/synchrogit/config.toml`, install the service, and make sure `ExecStart` points at the installed binary path. The packaged unit assumes `/usr/bin/synchrogit`.
+
+```sh
+mkdir -p ~/.config/synchrogit ~/.config/systemd/user
+cp packaging/config.example.toml ~/.config/synchrogit/config.toml
+cp packaging/synchrogit.service ~/.config/systemd/user/synchrogit.service
+$EDITOR ~/.config/systemd/user/synchrogit.service
+systemctl --user daemon-reload
+systemctl --user enable --now synchrogit.service
+```
+
 ## License
 
 GPL-3.0-or-later. See [`LICENSE`](LICENSE).
