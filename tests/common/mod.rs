@@ -2,6 +2,14 @@ use std::path::Path;
 use std::process::Command;
 
 pub fn run_git(dir: &Path, args: &[&str]) {
+    let _ = git_output(dir, args);
+}
+
+pub fn git_stdout(dir: &Path, args: &[&str]) -> String {
+    String::from_utf8(git_output(dir, args).stdout).expect("git stdout should be utf-8")
+}
+
+fn git_output(dir: &Path, args: &[&str]) -> std::process::Output {
     let output = Command::new("git")
         .args(args)
         .current_dir(dir)
@@ -14,6 +22,7 @@ pub fn run_git(dir: &Path, args: &[&str]) {
             String::from_utf8_lossy(&output.stderr),
         );
     }
+    output
 }
 
 pub fn init_bare(dir: &Path) {

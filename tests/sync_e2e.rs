@@ -117,3 +117,84 @@ async fn cycle_is_noop_when_no_changes() {
     assert!(!report.pulled);
     assert!(report.error.is_none(), "no error: {report:?}");
 }
+
+#[tokio::test]
+async fn branch_config_blocks_wrong_branch() {
+    let (_tmp, _remote, a, _b) = setup_pair();
+    std::fs::write(a.join("note.md"), "draft\n").unwrap();
+
+    let git = Git::new(&a);
+    let report = sync_cycle(
+        &git,
+        &CycleParams {
+            branch: Some("notes"),
+            auto_pull: false,
+            auto_push: false,
+            ..CycleParams::default()
+        },
+    )
+    .await;
+
+    let error = report.error.expect("branch mismatch should fail the cycle");
+    assert!(error.contains("expected `notes`"), "{error}");
+    assert_eq!(
+        common::git_stdout(&a, &["status", "--porcelain"]),
+        "?? note.md\n"
+    );
+}
+
+#[tokio::test]
+async fn ignore_patterns_exclude_status_and_commit() {
+    let (_tmp, _remote, a, _b) = setup_pair();
+    std::fs::create_dir_all(a.join("cache")).unwrap();
+    std::fs::write(a.join("cache/noise.txt"), "noise\n").unwrap();
+
+    let ignore = vec!["cache/**".to_string()];
+    let git = Git::new(&a);
+    let report = sync_cycle(
+        &git,
+        &CycleParams {
+            auto_pull: false,
+            auto_push: false,
+            ignore: &ignore,
+            ..CycleParams::default()
+        },
+    )
+    .await;
+
+    assert!(
+        !report.committed,
+        "ignored files should not commit: {report:?}"
+    );
+    assert!(report.error.is_none(), "no error: {report:?}");
+    assert_eq!(
+        common::git_stdout(&a, &["status", "--porcelain"]),
+        "?? cache/\n"
+    );
+}
+
+#[tokio::test]
+async fn explicit_remote_pushes_without_upstream() {
+    let (_tmp, _remote, a, b) = setup_pair();
+    common::run_git(&a, &["branch", "--unset-upstream"]);
+    std::fs::write(a.join("remote-target.md"), "via explicit remote\n").unwrap();
+
+    let git_a = Git::new(&a);
+    let report = sync_cycle(
+        &git_a,
+        &CycleParams {
+            branch: Some("main"),
+            remote: Some("origin"),
+            ..CycleParams::default()
+        },
+    )
+    .await;
+    assert!(report.committed, "should have committed: {report:?}");
+    assert!(report.pushed, "should have pushed via remote: {report:?}");
+    assert!(report.error.is_none(), "no error: {report:?}");
+
+    let git_b = Git::new(&b);
+    let report_b = sync_cycle(&git_b, &CycleParams::default()).await;
+    assert!(report_b.pulled, "B should have pulled: {report_b:?}");
+    assert!(b.join("remote-target.md").exists());
+}

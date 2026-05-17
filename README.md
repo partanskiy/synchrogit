@@ -37,6 +37,7 @@ interval = "15s"
 debounce = "2s"
 backoff-min = "15s"
 backoff-max = "5m"
+git-timeout = "60s"
 commit-template = "{ts} ({host})"
 auto-pull = true
 auto-push = true
@@ -44,6 +45,9 @@ auto-push = true
 [[repo]]
 name = "notes"
 path = "~/Notes/Main"
+branch = "main"
+remote = "origin"
+ignore = [".direnv/**", "target/**"]
 
 [[repo]]
 name = "agent-wiki"
@@ -51,7 +55,9 @@ path = "~/.local/share/agent-wiki"
 interval = "30s"
 ```
 
-Repo names must be unique. Paths may use `~` and environment variables, but must be absolute after expansion. Commit templates can use `{ts}` and `{host}`. `backoff-min` must be greater than zero, and `backoff-max` must be greater than or equal to `backoff-min`.
+Repo names must be unique. Paths may use `~` and environment variables, but must be absolute after expansion. Commit templates can use `{ts}` and `{host}`.
+
+`branch`, if set, is a guard: the daemon refuses to sync the repo when the worktree is on another branch. `remote`, if set, is used for fetch/push instead of relying on the branch upstream. `ignore` entries are passed to git as pathspec excludes for status/add, so matching files do not trigger auto-commits. `backoff-min`, `backoff-max`, and `git-timeout` must be greater than zero; `backoff-max` must be greater than or equal to `backoff-min`.
 
 ## Usage
 

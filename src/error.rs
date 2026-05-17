@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use thiserror::Error;
 
@@ -13,6 +14,12 @@ pub enum SynchrogitError {
 
     #[error("failed to spawn git: {0}")]
     GitSpawn(std::io::Error),
+
+    #[error("git {args:?} timed out after {timeout:?}")]
+    GitTimeout {
+        args: Vec<String>,
+        timeout: Duration,
+    },
 
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),

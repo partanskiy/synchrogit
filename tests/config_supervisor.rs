@@ -35,6 +35,7 @@ interval = "20s"
 debounce = "3s"
 backoff-min = "5s"
 backoff-max = "45s"
+git-timeout = "30s"
 auto-push = false
 auto-pull = true
 
@@ -67,6 +68,7 @@ path = "{}"
     assert_eq!(notes_cfg.debounce, Duration::from_secs(3));
     assert_eq!(notes_cfg.backoff_min, Duration::from_secs(5));
     assert_eq!(notes_cfg.backoff_max, Duration::from_secs(45));
+    assert_eq!(notes_cfg.git_timeout, Duration::from_secs(30));
     assert!(!notes_cfg.auto_push);
     assert!(!notes_cfg.auto_pull);
     assert_eq!(notes_cfg.ignore, vec!["target", ".direnv"]);
@@ -75,6 +77,7 @@ path = "{}"
     assert_eq!(wiki_cfg.path, wiki);
     assert_eq!(wiki_cfg.interval, Duration::from_secs(20));
     assert_eq!(wiki_cfg.debounce, Duration::from_secs(3));
+    assert_eq!(wiki_cfg.git_timeout, Duration::from_secs(30));
     assert!(!wiki_cfg.auto_push);
     assert!(wiki_cfg.auto_pull);
 }
@@ -113,6 +116,50 @@ path = "{}"
     .unwrap_err()
     .to_string();
     assert!(err.contains("defaults.backoff-max must be greater than or equal"));
+}
+
+#[test]
+fn config_rejects_invalid_timeout_and_empty_sync_fields() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+
+    let err = parse_str(&format!(
+        r#"
+[defaults]
+git-timeout = "0s"
+
+[[repo]]
+path = "{}"
+"#,
+        toml_path(&repo),
+    ))
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("defaults.git-timeout must be greater than zero"));
+
+    let err = parse_str(&format!(
+        r#"
+[[repo]]
+path = "{}"
+branch = ""
+"#,
+        toml_path(&repo),
+    ))
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("branch must not be empty"));
+
+    let err = parse_str(&format!(
+        r#"
+[[repo]]
+path = "{}"
+ignore = [""]
+"#,
+        toml_path(&repo),
+    ))
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("ignore patterns must not be empty"));
 }
 
 #[tokio::test]

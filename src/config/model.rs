@@ -6,6 +6,7 @@ use serde::Deserialize;
 
 use crate::clock::DEFAULT_COMMIT_TEMPLATE;
 use crate::error::{Result, SynchrogitError};
+use crate::git::cmd::DEFAULT_GIT_TIMEOUT;
 use crate::worker::WorkerConfig;
 
 pub const DEFAULT_INTERVAL: Duration = Duration::from_secs(15);
@@ -49,6 +50,11 @@ impl Config {
                 "defaults.backoff-max must be greater than or equal to defaults.backoff-min".into(),
             ));
         }
+        if self.defaults.git_timeout.is_zero() {
+            return Err(SynchrogitError::Config(
+                "defaults.git-timeout must be greater than zero".into(),
+            ));
+        }
 
         let mut names = HashSet::new();
         for repo in &self.repos {
@@ -70,6 +76,32 @@ impl Config {
                     repo.path.display()
                 )));
             }
+            if repo
+                .branch
+                .as_deref()
+                .is_some_and(|value| value.trim().is_empty())
+            {
+                return Err(SynchrogitError::Config(format!(
+                    "repo `{}` branch must not be empty",
+                    repo.name
+                )));
+            }
+            if repo
+                .remote
+                .as_deref()
+                .is_some_and(|value| value.trim().is_empty())
+            {
+                return Err(SynchrogitError::Config(format!(
+                    "repo `{}` remote must not be empty",
+                    repo.name
+                )));
+            }
+            if repo.ignore.iter().any(|pattern| pattern.trim().is_empty()) {
+                return Err(SynchrogitError::Config(format!(
+                    "repo `{}` ignore patterns must not be empty",
+                    repo.name
+                )));
+            }
         }
         Ok(())
     }
@@ -81,6 +113,7 @@ pub struct DefaultsConfig {
     pub debounce: Duration,
     pub backoff_min: Duration,
     pub backoff_max: Duration,
+    pub git_timeout: Duration,
     pub commit_template: String,
     pub conflict_policy: ConflictPolicy,
     pub auto_push: bool,
@@ -94,6 +127,7 @@ impl Default for DefaultsConfig {
             debounce: DEFAULT_DEBOUNCE,
             backoff_min: DEFAULT_BACKOFF_MIN,
             backoff_max: DEFAULT_BACKOFF_MAX,
+            git_timeout: DEFAULT_GIT_TIMEOUT,
             commit_template: DEFAULT_COMMIT_TEMPLATE.to_string(),
             conflict_policy: ConflictPolicy::KeepRemote,
             auto_push: true,
@@ -127,6 +161,7 @@ impl RepoConfig {
             debounce: self.debounce.unwrap_or(defaults.debounce),
             backoff_min: defaults.backoff_min,
             backoff_max: defaults.backoff_max,
+            git_timeout: defaults.git_timeout,
             commit_template: self
                 .commit_template
                 .clone()
@@ -149,6 +184,7 @@ pub struct ResolvedRepoConfig {
     pub debounce: Duration,
     pub backoff_min: Duration,
     pub backoff_max: Duration,
+    pub git_timeout: Duration,
     pub commit_template: String,
     pub conflict_policy: ConflictPolicy,
     pub auto_push: bool,
@@ -165,9 +201,13 @@ impl From<&ResolvedRepoConfig> for WorkerConfig {
             debounce: repo.debounce,
             backoff_min: repo.backoff_min,
             backoff_max: repo.backoff_max,
+            git_timeout: repo.git_timeout,
+            branch: repo.branch.clone(),
+            remote: repo.remote.clone(),
             commit_template: repo.commit_template.clone(),
             auto_push: repo.auto_push,
             auto_pull: repo.auto_pull,
+            ignore: repo.ignore.clone(),
         }
     }
 }
