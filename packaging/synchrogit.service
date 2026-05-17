@@ -1,0 +1,13 @@
+[Unit]
+Description=Synchronize configured Git repositories
+Documentation=https://github.com/partanskiy/synchrogit
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/synchrogit run
+Restart=on-failure
+RestartSec=10s
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=default.target

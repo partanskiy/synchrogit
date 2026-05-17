@@ -162,6 +162,11 @@ ignore = [""]
     assert!(err.contains("ignore patterns must not be empty"));
 }
 
+#[test]
+fn packaging_example_config_parses() {
+    parse_str(include_str!("../packaging/config.example.toml")).unwrap();
+}
+
 #[tokio::test]
 async fn supervisor_spawns_workers_and_stops_them() {
     clock::init_local_offset();
