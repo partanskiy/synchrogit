@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  validate:
+    name: validate release tag
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate tag and crate version
+        id: meta
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::tag must look like vMAJOR.MINOR.PATCH[-pre][+build], got $tag"
+            exit 1
+          fi
+
+          cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          if [[ "$cargo_version" != "$version" ]]; then
+            echo "::error::Cargo.toml version $cargo_version does not match tag $tag"
+            exit 1
+          fi
+
+          git fetch origin main:refs/remotes/origin/main --tags
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::release tag $tag must point to a commit reachable from origin/main"
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build ${{ matrix.target }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build release binary
+        run: cargo build --locked --release --target '${{ matrix.target }}'
+      - name: Package tarball
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+
+          archive="synchrogit-${TAG}-${TARGET}.tar.gz"
+          staging="$(mktemp -d)"
+          mkdir -p dist
+
+          cp "target/${TARGET}/release/synchrogit" "$staging/synchrogit"
+          cp README.md LICENSE "$staging/"
+          cp packaging/synchrogit.service "$staging/"
+          cp packaging/config.example.toml "$staging/"
+
+          tar -C "$staging" -czf "dist/${archive}" \
+            synchrogit \
+            README.md \
+            LICENSE \
+            synchrogit.service \
+            config.example.toml
+          sha256sum "dist/${archive}" > "dist/${archive}.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: publish GitHub release
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          (cd dist && sha256sum *.tar.gz > SHA256SUMS)
+          gh release create "$TAG" dist/* \
+            --title "$TAG" \
+            --notes "Binary release for $TAG. See SHA256SUMS for checksums."
