@@ -1,0 +1,23 @@
+[defaults]
+interval = "15s"
+debounce = "2s"
+backoff-min = "15s"
+backoff-max = "5m"
+git-timeout = "60s"
+commit-template = "{ts} ({host})"
+auto-pull = true
+auto-push = true
+
+[[repo]]
+name = "notes"
+path = "~/Notes/Main"
+branch = "main"
+remote = "origin"
+ignore = [".direnv/**", "target/**"]
+
+[[repo]]
+name = "agent-wiki"
+path = "~/.local/share/agent-wiki"
+branch = "main"
+remote = "origin"
+interval = "30s"

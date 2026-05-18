@@ -167,6 +167,11 @@ fn packaging_example_config_parses() {
     parse_str(include_str!("../packaging/config.example.toml")).unwrap();
 }
 
+#[test]
+fn public_example_config_parses() {
+    parse_str(include_str!("../examples/config.toml")).unwrap();
+}
+
 #[tokio::test]
 async fn supervisor_spawns_workers_and_stops_them() {
     clock::init_local_offset();

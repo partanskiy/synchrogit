@@ -59,6 +59,8 @@ Repo names must be unique. Paths may use `~` and environment variables, but must
 
 `branch`, if set, is a guard: the daemon refuses to sync the repo when the worktree is on another branch. `remote`, if set, is used for fetch/push instead of relying on the branch upstream. `ignore` entries are passed to git as pathspec excludes for status/add, so matching files do not trigger auto-commits. `backoff-min`, `backoff-max`, and `git-timeout` must be greater than zero; `backoff-max` must be greater than or equal to `backoff-min`.
 
+See [`docs/config.md`](docs/config.md) and [`examples/config.toml`](examples/config.toml) for the full config reference.
+
 ## Usage
 
 ```sh
@@ -98,6 +100,8 @@ $EDITOR ~/.config/systemd/user/synchrogit.service
 systemctl --user daemon-reload
 systemctl --user enable --now synchrogit.service
 ```
+
+See [`docs/operations.md`](docs/operations.md) for day-to-day commands and release notes.
 
 ## License
 
