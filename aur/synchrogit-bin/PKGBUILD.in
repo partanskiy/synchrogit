@@ -1,0 +1,23 @@
+pkgname=synchrogit-bin
+_pkgname=synchrogit
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc='Daemon that keeps git repositories synced with their remotes (prebuilt binary)'
+arch=('x86_64' 'aarch64')
+url='@REPO_URL@'
+license=('GPL-3.0-or-later')
+depends=('git')
+provides=('synchrogit')
+conflicts=('synchrogit')
+source_x86_64=("$_pkgname-$pkgver-x86_64-unknown-linux-gnu.tar.gz::@BIN_X86_64_URL@")
+source_aarch64=("$_pkgname-$pkgver-aarch64-unknown-linux-gnu.tar.gz::@BIN_AARCH64_URL@")
+sha256sums_x86_64=('@BIN_X86_64_SHA256@')
+sha256sums_aarch64=('@BIN_AARCH64_SHA256@')
+
+package() {
+  install -Dm755 "$srcdir/$_pkgname" "$pkgdir/usr/bin/$_pkgname"
+  install -Dm644 "$srcdir/README.md" "$pkgdir/usr/share/doc/$_pkgname/README.md"
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$_pkgname/LICENSE"
+  install -Dm644 "$srcdir/synchrogit.service" "$pkgdir/usr/lib/systemd/user/synchrogit.service"
+  install -Dm644 "$srcdir/config.example.toml" "$pkgdir/usr/share/doc/$_pkgname/config.example.toml"
+}

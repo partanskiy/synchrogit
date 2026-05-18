@@ -1,0 +1,129 @@
+name: Update AUR
+
+on:
+  workflow_run:
+    workflows:
+      - Release
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  update-aur:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install packaging dependencies
+        run: pacman -Syu --noconfirm --needed git openssh curl
+
+      - name: Prepare AUR SSH key
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          install -dm700 /root/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > /root/.ssh/aur
+          chmod 600 /root/.ssh/aur
+          ssh-keyscan -t ed25519 aur.archlinux.org > /root/.ssh/known_hosts
+          chmod 644 /root/.ssh/known_hosts
+
+      - name: Resolve release tag
+        id: version
+        run: |
+          remote_url="https://github.com/${{ github.repository }}.git"
+          head_sha="${{ github.event.workflow_run.head_sha }}"
+          tag_name=$(
+            git ls-remote --tags "$remote_url" 'refs/tags/v*.*.*' |
+              awk -v sha="$head_sha" '$1 == sha && $2 ~ /\^\{\}$/ { sub(/^refs\/tags\//, "", $2); sub(/\^\{\}$/, "", $2); print $2 }' |
+              sort -V |
+              tail -n1
+          )
+          if [[ -z "$tag_name" ]]; then
+            echo "could not resolve semver tag for workflow head sha" >&2
+            exit 1
+          fi
+          if [[ "$tag_name" == *-* || "$tag_name" == *+* ]]; then
+            echo "AUR publishing is skipped for prerelease/build-metadata tag $tag_name"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+            echo "pkgver=${tag_name#v}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+          echo "pkgver=${tag_name#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Render AUR package files
+        if: steps.version.outputs.publish == 'true'
+        env:
+          REPO_URL: https://github.com/${{ github.repository }}
+          PKGVER: ${{ steps.version.outputs.pkgver }}
+        run: ./scripts/render-aur-packages.sh "$PKGVER" "$REPO_URL" /tmp/aur-rendered
+
+      - name: Push package updates to AUR
+        if: steps.version.outputs.publish == 'true'
+        env:
+          PKGVER: ${{ steps.version.outputs.pkgver }}
+        run: |
+          set -x
+          unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+          workdir=$(mktemp -d)
+          ssh_cmd='ssh -i /root/.ssh/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=/root/.ssh/known_hosts -o StrictHostKeyChecking=yes'
+
+          echo "shell=$SHELL"
+          echo "pwd=$(pwd)"
+          echo "workdir=$workdir"
+          git --version
+          env | sort | grep '^GIT' || true
+          ls -la /root/.ssh
+          sed -n '1,5p' /root/.ssh/known_hosts || true
+          find /tmp/aur-rendered -maxdepth 2 -type f | sort
+
+          for pkg in synchrogit synchrogit-bin; do
+            echo "=== package: $pkg ==="
+            git clone "https://aur.archlinux.org/${pkg}.git" "$workdir/$pkg"
+            git config --global --add safe.directory "$workdir/$pkg"
+            echo "--- after clone ---"
+            ls -la "$workdir/$pkg"
+            ls -ld "$workdir/$pkg"
+            ls -la "$workdir/$pkg/.git" || true
+            git -C "$workdir/$pkg" rev-parse --is-inside-work-tree
+            git -C "$workdir/$pkg" remote -v
+
+            echo "--- before cleanup ---"
+            find "$workdir/$pkg" -maxdepth 1 -mindepth 1 | sort
+            find "$workdir/$pkg" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            echo "--- after cleanup ---"
+            find "$workdir/$pkg" -maxdepth 1 -mindepth 1 | sort
+
+            install -m644 "/tmp/aur-rendered/$pkg/PKGBUILD" "$workdir/$pkg/PKGBUILD"
+            install -m644 "/tmp/aur-rendered/$pkg/.SRCINFO" "$workdir/$pkg/.SRCINFO"
+            echo "--- after copy ---"
+            find "$workdir/$pkg" -maxdepth 1 -mindepth 1 | sort
+            ls -ld "$workdir/$pkg"
+            ls -l "$workdir/$pkg/PKGBUILD" "$workdir/$pkg/.SRCINFO"
+            git -C "$workdir/$pkg" rev-parse --is-inside-work-tree
+            git -C "$workdir/$pkg" status --short
+
+            git -C "$workdir/$pkg" config user.name "github-actions[bot]"
+            git -C "$workdir/$pkg" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$workdir/$pkg" add PKGBUILD .SRCINFO
+            echo "--- after add ---"
+            git -C "$workdir/$pkg" status --short
+
+            if git -C "$workdir/$pkg" diff --cached --quiet; then
+              echo "no changes for $pkg"
+              continue
+            fi
+
+            git -C "$workdir/$pkg" commit -m "Update to ${PKGVER}"
+            GIT_SSH_COMMAND="$ssh_cmd" git -C "$workdir/$pkg" push "ssh://aur@aur.archlinux.org/${pkg}.git" HEAD:master
+          done
