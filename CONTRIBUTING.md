@@ -24,13 +24,7 @@ Two kinds of messages are accepted:
    release: vMAJOR.MINOR.PATCH[-prerelease][+build]
    ```
 
-   A `release: vX.Y.Z` commit **must** land together with a matching git tag `vX.Y.Z`. Push them atomically:
-
-   ```sh
-   git push --atomic origin main vX.Y.Z
-   ```
-
-   A CI check rejects `release:` commits that arrive without their tag.
+   These are accepted for explicit version-bump commits, but GitHub Releases are tag-driven. After the version-bump PR lands on `main`, create and push the matching `vX.Y.Z` tag on the merged commit.
 
 Merge / revert / fixup / squash / amend commits are skipped by the linter.
 
@@ -57,4 +51,4 @@ All four must pass for CI to be green.
 
 ## Releasing
 
-See [`RELEASING.md`](RELEASING.md). The release automation itself lands with the release pipeline in a later PR.
+See [`RELEASING.md`](RELEASING.md).

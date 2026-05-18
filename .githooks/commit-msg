@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Enforces Conventional Commits plus the custom `release: vX.Y.Z` type used in
-# this repo. The same regexes run in CI via .github/workflows/commitlint.yml.
+# Enforces Conventional Commits plus the optional `release: vX.Y.Z` type used
+# for explicit version-bump commits. Releases themselves are tag-driven.
+# The same regexes run in CI via .github/workflows/commitlint.yml.
 set -euo pipefail
 
 msg_file="${1:?missing commit-message file argument}"
