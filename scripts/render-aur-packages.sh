@@ -68,8 +68,8 @@ render_template() {
 
 tag="v${version}"
 source_url="${repo_url}/archive/refs/tags/${tag}.tar.gz"
-bin_x86_64_url="${repo_url}/releases/download/${tag}/synchrogit-${tag}-x86_64-unknown-linux-gnu.tar.gz"
-bin_aarch64_url="${repo_url}/releases/download/${tag}/synchrogit-${tag}-aarch64-unknown-linux-gnu.tar.gz"
+bin_x86_64_url="${repo_url}/releases/download/${tag}/synchrogit-${tag}-x86_64-unknown-linux-musl.tar.gz"
+bin_aarch64_url="${repo_url}/releases/download/${tag}/synchrogit-${tag}-aarch64-unknown-linux-musl.tar.gz"
 
 source_sha=${SOURCE_SHA256:-$(download_and_sha256 "$source_url" "synchrogit-source.tar.gz")}
 bin_x86_64_sha=${BIN_X86_64_SHA256:-$(download_and_sha256 "$bin_x86_64_url" "synchrogit-x86_64-linux.tar.gz")}
