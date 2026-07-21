@@ -88,7 +88,29 @@ brew install partanskiy/tap/synchrogit
 brew services start synchrogit
 ```
 
-Elsewhere, grab a binary tarball from [GitHub Releases](https://github.com/partanskiy/synchrogit/releases) or build from source.
+On Debian/Ubuntu, add the signed APT repo once, then install and upgrade through `apt` as usual:
+
+```sh
+curl -fsSL https://partanskiy.github.io/apt-repo/partanskiy.gpg | sudo tee /usr/share/keyrings/partanskiy.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/partanskiy.gpg] https://partanskiy.github.io/apt-repo ./" | sudo tee /etc/apt/sources.list.d/partanskiy.list
+sudo apt update
+sudo apt install synchrogit
+```
+
+On Fedora, use the COPR repo:
+
+```sh
+sudo dnf copr enable partanskiy/synchrogit
+sudo dnf install synchrogit
+```
+
+With Nix, the repo is a flake:
+
+```sh
+nix profile install github:partanskiy/synchrogit
+```
+
+Standalone `.deb` and `.rpm` packages (static binaries, any distro) are attached to every [GitHub Release](https://github.com/partanskiy/synchrogit/releases), alongside plain binary tarballs.
 
 ## Building
 
@@ -104,8 +126,11 @@ Package/install assets live under `packaging/`, one directory per distribution c
 
 - `packaging/aur/` — AUR `PKGBUILD` templates, rendered and published by CI on release.
 - `packaging/brew/` — Homebrew formula template for the [`partanskiy/homebrew-tap`](https://github.com/partanskiy/homebrew-tap) tap, likewise CI-published.
-- `packaging/systemd/synchrogit.service` — systemd user service (Linux).
+- `packaging/copr/` — RPM spec template submitted to [COPR](https://copr.fedorainfracloud.org) by CI.
+- `packaging/systemd/` — systemd user service and the per-user system template (Linux).
 - `packaging/config.example.toml` — complete example config.
+- `.deb`/`.rpm` metadata lives in `Cargo.toml` (`package.metadata.deb` / `package.metadata.generate-rpm`); the [APT repo](https://github.com/partanskiy/apt-repo) is regenerated from release `.deb`s by CI.
+- `flake.nix` — Nix builds straight from the repo; no publisher needed.
 
 For a manual local install, copy the example config to `~/.config/synchrogit/config.toml`, install the service, and make sure `ExecStart` points at the installed binary path. The packaged unit assumes `/usr/bin/synchrogit`.
 
