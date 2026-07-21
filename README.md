@@ -122,7 +122,9 @@ See [`docs/operations.md`](docs/operations.md) for day-to-day commands and relea
 
 ## License
 
-GPL-3.0-or-later. See [`LICENSE`](LICENSE).
+Licensed under either of [MIT](LICENSE-MIT) or [Apache License, Version 2.0](LICENSE-APACHE), at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this work shall be dual-licensed as above, without any additional terms or conditions.
 
 ## Contributing
 

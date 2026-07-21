@@ -41,7 +41,8 @@ Each tarball has a flat layout (the systemd units are Linux-only):
 synchrogit
 synchrogit.1
 README.md
-LICENSE
+LICENSE-MIT
+LICENSE-APACHE
 synchrogit.service
 synchrogit@.service
 config.example.toml

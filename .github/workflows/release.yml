@@ -94,11 +94,11 @@ jobs:
           mkdir -p dist
 
           cp "target/${TARGET}/release/synchrogit" "$staging/synchrogit"
-          cp README.md LICENSE "$staging/"
+          cp README.md LICENSE-MIT LICENSE-APACHE "$staging/"
           cp packaging/config.example.toml "$staging/"
           lowdown -s -Tman docs/synchrogit.1.md -o "$staging/synchrogit.1"
 
-          files=(synchrogit synchrogit.1 README.md LICENSE config.example.toml)
+          files=(synchrogit synchrogit.1 README.md LICENSE-MIT LICENSE-APACHE config.example.toml)
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             cp packaging/systemd/synchrogit.service "$staging/"
             cp "packaging/systemd/synchrogit@.service" "$staging/"

@@ -4,7 +4,7 @@ pkgrel=1
 pkgdesc='Daemon that keeps git repositories synced with their remotes'
 arch=('x86_64' 'aarch64')
 url='@REPO_URL@'
-license=('GPL-3.0-or-later')
+license=('MIT OR Apache-2.0')
 depends=('git')
 makedepends=('cargo' 'lowdown')
 source=("$pkgname-$pkgver.tar.gz::@SOURCE_URL@")
@@ -22,7 +22,8 @@ package() {
   install -Dm755 target/release/synchrogit "$pkgdir/usr/bin/synchrogit"
   install -Dm644 synchrogit.1 "$pkgdir/usr/share/man/man1/synchrogit.1"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
-  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 LICENSE-MIT "$pkgdir/usr/share/licenses/$pkgname/LICENSE-MIT"
+  install -Dm644 LICENSE-APACHE "$pkgdir/usr/share/licenses/$pkgname/LICENSE-APACHE"
   install -Dm644 packaging/systemd/synchrogit.service "$pkgdir/usr/lib/systemd/user/synchrogit.service"
   install -Dm644 packaging/systemd/synchrogit@.service "$pkgdir/usr/lib/systemd/system/synchrogit@.service"
   install -Dm644 packaging/config.example.toml "$pkgdir/usr/share/doc/$pkgname/config.example.toml"
