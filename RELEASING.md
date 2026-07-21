@@ -55,4 +55,6 @@ After the `Release` workflow completes successfully for a pushed tag, the `Updat
 
 The workflow needs the `AUR_SSH_PRIVATE_KEY` repository secret.
 
+The `Update AUR` workflow can also be started by hand (workflow dispatch with a `tag` input) when the automatic chain did not run — for example after publishing release assets manually.
+
 Prerelease tags such as `v0.1.0-rc.1` build GitHub Release artifacts but are skipped by the AUR workflow.
