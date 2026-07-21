@@ -1,5 +1,12 @@
 # synchrogit
 
+[![ci](https://img.shields.io/github/actions/workflow/status/partanskiy/synchrogit/ci.yml?branch=main&label=ci)](https://github.com/partanskiy/synchrogit/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/partanskiy/synchrogit?label=release)](https://github.com/partanskiy/synchrogit/releases/latest)
+[![aur](https://img.shields.io/aur/version/synchrogit?label=aur)](https://aur.archlinux.org/packages/synchrogit)
+[![brew tap](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpartanskiy%2Fhomebrew-tap%2Fmain%2FFormula%2Fsynchrogit.rb&search=version%20%22(%5B%5E%22%5D%2B)%22&label=brew%20tap)](https://github.com/partanskiy/homebrew-tap)
+[![apt](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fpartanskiy.github.io%2Fapt-repo%2FPackages&search=Version%3A%20(%5CS%2B)&label=apt)](https://github.com/partanskiy/apt-repo)
+[![license](https://img.shields.io/github/license/partanskiy/synchrogit)](LICENSE)
+
 A small daemon that keeps a set of git repositories in sync with their remotes:
 
 - Watches each repo for local file changes and commits them (timestamp-style messages, like the `git cit` convention).
@@ -79,38 +86,70 @@ The daemon listens on `$XDG_RUNTIME_DIR/synchrogit.sock`. If `XDG_RUNTIME_DIR` i
 
 ## Installation
 
-On Arch Linux, install [`synchrogit`](https://aur.archlinux.org/packages/synchrogit) (builds from source) or [`synchrogit-bin`](https://aur.archlinux.org/packages/synchrogit-bin) (prebuilt binary) from the AUR.
+[![Packaging status](https://repology.org/badge/vertical-allrepos/synchrogit.svg)](https://repology.org/project/synchrogit/versions)
 
-On macOS, install from the Homebrew tap and manage the daemon with `brew services` (launchd):
+| Platform | Install |
+| --- | --- |
+| Arch Linux | `paru -S synchrogit-bin` (prebuilt) or `paru -S synchrogit` (from source) |
+| macOS | `brew install partanskiy/tap/synchrogit` |
+| Debian/Ubuntu | signed APT repo — [see below](#debianubuntu) |
+| Fedora | `sudo dnf copr enable partanskiy/synchrogit && sudo dnf install synchrogit` |
+| Nix | `nix profile install github:partanskiy/synchrogit` |
+| Anything else | static `.deb` / `.rpm` / tarball from [Releases](https://github.com/partanskiy/synchrogit/releases/latest) |
+
+### Arch Linux
+
+[`synchrogit`](https://aur.archlinux.org/packages/synchrogit) (builds from source) and [`synchrogit-bin`](https://aur.archlinux.org/packages/synchrogit-bin) (prebuilt static binary) live in the AUR:
+
+```sh
+paru -S synchrogit-bin
+systemctl --user enable --now synchrogit
+```
+
+### macOS
+
+The Homebrew tap ships a `brew services` definition, so launchd autostart is one command away:
 
 ```sh
 brew install partanskiy/tap/synchrogit
 brew services start synchrogit
 ```
 
-On Debian/Ubuntu, add the signed APT repo once, then install and upgrade through `apt` as usual:
+### Debian/Ubuntu
+
+Add the signed APT repo once, then install and upgrade through `apt` as usual:
 
 ```sh
 curl -fsSL https://partanskiy.github.io/apt-repo/partanskiy.gpg | sudo tee /usr/share/keyrings/partanskiy.gpg > /dev/null
 echo "deb [signed-by=/usr/share/keyrings/partanskiy.gpg] https://partanskiy.github.io/apt-repo ./" | sudo tee /etc/apt/sources.list.d/partanskiy.list
 sudo apt update
 sudo apt install synchrogit
+systemctl --user enable --now synchrogit
 ```
 
-On Fedora, use the COPR repo:
+The binaries are fully static, so the same packages work on any Debian or Ubuntu release.
+
+### Fedora
 
 ```sh
 sudo dnf copr enable partanskiy/synchrogit
 sudo dnf install synchrogit
+systemctl --user enable --now synchrogit
 ```
 
-With Nix, the repo is a flake:
+### Nix
+
+The repository is a flake; the package includes the man page and the systemd user unit:
 
 ```sh
 nix profile install github:partanskiy/synchrogit
 ```
 
-Standalone `.deb` and `.rpm` packages (static binaries, any distro) are attached to every [GitHub Release](https://github.com/partanskiy/synchrogit/releases), alongside plain binary tarballs.
+### Everything else
+
+Standalone `.deb` and `.rpm` packages and plain binary tarballs are attached to every [GitHub Release](https://github.com/partanskiy/synchrogit/releases) (Linux builds are static musl binaries that run on any distro), with per-file checksums and an aggregate `SHA256SUMS`.
+
+To start the daemon at boot on headless machines — lingering and the `synchrogit@user` system template — see [`docs/operations.md`](docs/operations.md).
 
 ## Building
 
