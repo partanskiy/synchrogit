@@ -748,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "synchrogit"
-version = "26.7.1"
+version = "26.7.2"
 dependencies = [
  "anyhow",
  "clap",
