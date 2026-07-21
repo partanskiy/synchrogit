@@ -11,7 +11,9 @@ Designed for personal sync repositories such as an Obsidian vault or a notes rep
 
 ## Status
 
-Local development is proceeding in small PR-sized commits. The current binary supports:
+synchrogit is functional and released. Versions follow a niri-style calendar scheme (`YY.M.PATCH`, e.g. `26.7.0`), so version numbers signal freshness rather than SemVer compatibility; breaking changes are called out in release notes.
+
+The binary supports:
 
 - `synchrogit run`
 - multi-repo TOML config loading
@@ -74,6 +76,10 @@ synchrogit reload
 The daemon listens on `$XDG_RUNTIME_DIR/synchrogit.sock`. If `XDG_RUNTIME_DIR` is unset, it falls back to `/tmp/synchrogit-$UID.sock`. Override the path with `--socket` or `SYNCHROGIT_SOCKET`.
 
 `status` prints one tab-separated line per repo with the repo path, current branch, upstream, running flag, last outcome, consecutive failure count, and last error. Timer-triggered cycles use exponential backoff after failures; filesystem changes and manual `sync` commands can still trigger work immediately.
+
+## Installation
+
+On Arch Linux, install [`synchrogit`](https://aur.archlinux.org/packages/synchrogit) (builds from source) or [`synchrogit-bin`](https://aur.archlinux.org/packages/synchrogit-bin) (prebuilt binary) from the AUR. On other distributions, grab a binary tarball from [GitHub Releases](https://github.com/partanskiy/synchrogit/releases) or build from source.
 
 ## Building
 
