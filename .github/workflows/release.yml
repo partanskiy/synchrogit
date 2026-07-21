@@ -68,6 +68,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: Install lowdown
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends lowdown
       - name: Build release binary
         run: cargo build --locked --release --target '${{ matrix.target }}'
       - name: Package tarball
@@ -85,9 +89,11 @@ jobs:
           cp README.md LICENSE "$staging/"
           cp packaging/synchrogit.service "$staging/"
           cp packaging/config.example.toml "$staging/"
+          lowdown -s -Tman docs/synchrogit.1.md -o "$staging/synchrogit.1"
 
           tar -C "$staging" -czf "dist/${archive}" \
             synchrogit \
+            synchrogit.1 \
             README.md \
             LICENSE \
             synchrogit.service \

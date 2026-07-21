@@ -35,6 +35,7 @@ Each tarball has a flat layout:
 
 ```sh
 synchrogit
+synchrogit.1
 README.md
 LICENSE
 synchrogit.service
