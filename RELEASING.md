@@ -2,6 +2,8 @@
 
 Releases are tag-driven. `main` stays protected and all code changes still land through pull requests.
 
+Versions follow a niri-style calendar scheme: `YY.M.PATCH`, e.g. `v26.7.0` for the first July 2026 release and `v26.7.1` for a patch on top of it. Mechanically these are still three-component SemVer versions (no leading zeros), so everything below applies unchanged.
+
 ## Flow
 
 1. Update `Cargo.toml` to the target version in a normal PR.
