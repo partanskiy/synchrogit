@@ -89,13 +89,13 @@ async fn conflict_keeps_remote_and_saves_local_copy() {
     assert_eq!(final_content, "from B\n");
 
     // A `.conflict-...` sibling holds A's pre-merge version, byte-identical.
+    // The marker sits before the extension so the copy stays a visible `.md`.
     let conflicts: Vec<_> = std::fs::read_dir(&a)
         .unwrap()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.file_name()
-                .to_string_lossy()
-                .starts_with("shared.md.conflict-")
+            let name = e.file_name().to_string_lossy().into_owned();
+            name.starts_with("shared.conflict-") && name.ends_with(".md")
         })
         .collect();
     assert_eq!(
