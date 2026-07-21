@@ -30,9 +30,13 @@ synchrogit reload
 
 The daemon also watches the config file parent directory and reloads after edits or atomic replacement. Malformed config is rejected and the previous worker set keeps running.
 
-## Systemd User Service
+## Deployment models (Linux)
 
-The packaged service assumes `/usr/bin/synchrogit`:
+The packages ship two systemd units; pick one per machine.
+
+### 1. User service (desktops)
+
+Runs inside your user session, starts at login:
 
 ```sh
 systemctl --user enable --now synchrogit.service
@@ -40,7 +44,29 @@ systemctl --user status synchrogit.service
 journalctl --user -u synchrogit.service -f
 ```
 
-For manual installs, copy `packaging/systemd/synchrogit.service` to `~/.config/systemd/user/synchrogit.service` and edit `ExecStart` if the binary lives elsewhere.
+### 2. User service + lingering (recommended for headless and always-on machines)
+
+Same unit, but the user manager — and the daemon with it — starts at boot and survives logout:
+
+```sh
+sudo loginctl enable-linger $USER
+systemctl --user enable --now synchrogit.service
+```
+
+Check lingering with `loginctl user-status $USER` (`Linger: yes`). Root can inspect another user's daemon with `systemctl --user -M <user>@ status synchrogit`.
+
+### 3. System template (root-managed fleets)
+
+`synchrogit@<user>.service` runs the daemon for one user under the system manager:
+
+```sh
+sudo systemctl enable --now synchrogit@alice.service
+sudo systemctl status synchrogit@alice.service
+```
+
+The template binds the control socket at `/run/synchrogit/<user>/synchrogit.sock`; the CLI probes that location automatically, so `synchrogit status` works from the user's shell without extra flags. Config resolution is unchanged — the daemon runs as the instance user and reads their `~/.config/synchrogit/config.toml`, falling back to the machine-wide `/etc/synchrogit/config.toml`. The lookup is first-match, not a merge: a user config completely shadows the `/etc` one.
+
+For manual installs, copy `packaging/systemd/synchrogit.service` to `~/.config/systemd/user/synchrogit.service` (or `packaging/systemd/synchrogit@.service` to `/etc/systemd/system/`) and edit `ExecStart` if the binary lives elsewhere.
 
 ## Release
 
