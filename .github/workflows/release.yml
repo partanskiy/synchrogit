@@ -80,8 +80,26 @@ jobs:
           else
             brew install lowdown
           fi
+      - name: Install cargo-deb and cargo-generate-rpm
+        if: runner.os == 'Linux'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
       - name: Build release binary
         run: cargo build --locked --release --target '${{ matrix.target }}'
+      - name: Build .deb and .rpm packages
+        if: runner.os == 'Linux'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/man dist
+          lowdown -s -Tman docs/synchrogit.1.md -o target/man/synchrogit.1
+          cargo deb --no-build --target "$TARGET" -o dist/
+          cargo generate-rpm --target "$TARGET" -o dist/
+          for pkg in dist/*.deb dist/*.rpm; do
+            sha256sum "$pkg" > "$pkg.sha256"
+          done
       - name: Package tarball
         env:
           TAG: ${{ needs.validate.outputs.tag }}
@@ -134,7 +152,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          (cd dist && sha256sum *.tar.gz > SHA256SUMS)
+          (cd dist && sha256sum *.tar.gz *.deb *.rpm > SHA256SUMS)
           gh release create "$TAG" dist/* \
             --title "$TAG" \
             --notes "Binary release for $TAG. See SHA256SUMS for checksums."
