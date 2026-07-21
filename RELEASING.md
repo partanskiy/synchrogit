@@ -6,11 +6,11 @@ Versions follow a niri-style calendar scheme: `YY.M.PATCH`, e.g. `v26.7.0` for t
 
 ## Flow
 
-1. Update `Cargo.toml` to the target version in a normal PR.
-2. Merge the PR to `main`.
-3. Fetch `main` locally and create a matching tag on the merged commit.
-4. Push the tag.
-5. Let the release workflow build and publish binary tarballs.
+Tags go on whatever `main` commit is being released — there is no dedicated release commit. The only requirement is that `Cargo.toml` at the tagged commit already carries the target version, so land the version bump through any normal PR first (a `chore:` commit is fine, on its own or bundled with the change being released).
+
+1. Make sure `Cargo.toml` on `main` matches the version being released.
+2. Create an annotated tag on the chosen `main` commit and push it.
+3. Let the release workflow build and publish binary tarballs.
 
 ```sh
 git fetch origin
