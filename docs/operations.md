@@ -40,7 +40,7 @@ systemctl --user status synchrogit.service
 journalctl --user -u synchrogit.service -f
 ```
 
-For manual installs, copy `packaging/synchrogit.service` to `~/.config/systemd/user/synchrogit.service` and edit `ExecStart` if the binary lives elsewhere.
+For manual installs, copy `packaging/systemd/synchrogit.service` to `~/.config/systemd/user/synchrogit.service` and edit `ExecStart` if the binary lives elsewhere.
 
 ## Release
 

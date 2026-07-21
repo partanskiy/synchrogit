@@ -87,7 +87,7 @@ jobs:
 
           cp "target/${TARGET}/release/synchrogit" "$staging/synchrogit"
           cp README.md LICENSE "$staging/"
-          cp packaging/synchrogit.service "$staging/"
+          cp packaging/systemd/synchrogit.service "$staging/"
           cp packaging/config.example.toml "$staging/"
           lowdown -s -Tman docs/synchrogit.1.md -o "$staging/synchrogit.1"
 

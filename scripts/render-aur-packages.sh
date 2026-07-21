@@ -78,11 +78,11 @@ bin_aarch64_sha=${BIN_AARCH64_SHA256:-$(download_and_sha256 "$bin_aarch64_url" "
 mkdir -p "$output_root/synchrogit" "$output_root/synchrogit-bin"
 
 render_template \
-  "$repo_root/aur/synchrogit/PKGBUILD.in" \
+  "$repo_root/packaging/aur/synchrogit/PKGBUILD.in" \
   "$output_root/synchrogit/PKGBUILD"
 
 render_template \
-  "$repo_root/aur/synchrogit-bin/PKGBUILD.in" \
+  "$repo_root/packaging/aur/synchrogit-bin/PKGBUILD.in" \
   "$output_root/synchrogit-bin/PKGBUILD"
 
 generate_srcinfo "$output_root/synchrogit"

@@ -91,17 +91,19 @@ Requires Rust 1.94+ (edition 2024) and a recent `git` on PATH.
 
 ## Packaging
 
-Package/install assets live under `packaging/`:
+Package/install assets live under `packaging/`, one directory per distribution channel:
 
-- `packaging/synchrogit.service` is a systemd user service.
-- `packaging/config.example.toml` is a complete example config.
+- `packaging/aur/` — AUR `PKGBUILD` templates, rendered and published by CI on release.
+- `packaging/brew/` — Homebrew formula template for the [`partanskiy/homebrew-tap`](https://github.com/partanskiy/homebrew-tap) tap, likewise CI-published.
+- `packaging/systemd/synchrogit.service` — systemd user service (Linux).
+- `packaging/config.example.toml` — complete example config.
 
 For a manual local install, copy the example config to `~/.config/synchrogit/config.toml`, install the service, and make sure `ExecStart` points at the installed binary path. The packaged unit assumes `/usr/bin/synchrogit`.
 
 ```sh
 mkdir -p ~/.config/synchrogit ~/.config/systemd/user
 cp packaging/config.example.toml ~/.config/synchrogit/config.toml
-cp packaging/synchrogit.service ~/.config/systemd/user/synchrogit.service
+cp packaging/systemd/synchrogit.service ~/.config/systemd/user/synchrogit.service
 $EDITOR ~/.config/systemd/user/synchrogit.service
 systemctl --user daemon-reload
 systemctl --user enable --now synchrogit.service
