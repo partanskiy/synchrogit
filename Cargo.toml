@@ -1,6 +1,6 @@
 [package]
 name = "synchrogit"
-version = "26.7.2"
+version = "26.7.3"
 edition = "2024"
 rust-version = "1.94"
 description = "Daemon that keeps git repositories synced with their remotes"
