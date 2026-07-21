@@ -27,6 +27,7 @@
             cargoLock.lockFile = ./Cargo.lock;
 
             nativeBuildInputs = [ pkgs.lowdown ];
+            nativeCheckInputs = [ pkgs.gitMinimal ];
 
             postBuild = ''
               lowdown -s -Tman docs/synchrogit.1.md -o synchrogit.1
