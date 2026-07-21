@@ -1,0 +1,98 @@
+name: Update Homebrew tap
+
+on:
+  workflow_run:
+    workflows:
+      - Release
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g. v26.7.4); its GitHub release assets must already exist'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  update-tap:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Prepare tap SSH key
+        env:
+          TAP_SSH_PRIVATE_KEY: ${{ secrets.TAP_SSH_PRIVATE_KEY }}
+        run: |
+          install -dm700 ~/.ssh
+          printf '%s\n' "$TAP_SSH_PRIVATE_KEY" > ~/.ssh/tap
+          chmod 600 ~/.ssh/tap
+          ssh-keyscan -t ed25519 github.com > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Resolve release tag
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag_name="$INPUT_TAG"
+            if [[ ! "$tag_name" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+              echo "tag input must look like vMAJOR.MINOR.PATCH[-pre][+build], got $tag_name" >&2
+              exit 1
+            fi
+          else
+            remote_url="https://github.com/${{ github.repository }}.git"
+            head_sha="${{ github.event.workflow_run.head_sha }}"
+            tag_name=$(
+              git ls-remote --tags "$remote_url" 'refs/tags/v*.*.*' |
+                awk -v sha="$head_sha" '$1 == sha && $2 ~ /\^\{\}$/ { sub(/^refs\/tags\//, "", $2); sub(/\^\{\}$/, "", $2); print $2 }' |
+                sort -V |
+                tail -n1
+            )
+          fi
+          if [[ -z "$tag_name" ]]; then
+            echo "could not resolve semver tag for workflow head sha" >&2
+            exit 1
+          fi
+          if [[ "$tag_name" == *-* || "$tag_name" == *+* ]]; then
+            echo "Homebrew publishing is skipped for prerelease/build-metadata tag $tag_name"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "pkgver=${tag_name#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Render Homebrew formula
+        if: steps.version.outputs.publish == 'true'
+        env:
+          REPO_URL: https://github.com/${{ github.repository }}
+          PKGVER: ${{ steps.version.outputs.pkgver }}
+        run: ./scripts/render-brew-formula.sh "$PKGVER" "$REPO_URL" /tmp/brew-rendered
+
+      - name: Push formula to the tap
+        if: steps.version.outputs.publish == 'true'
+        env:
+          PKGVER: ${{ steps.version.outputs.pkgver }}
+        run: |
+          workdir=$(mktemp -d)
+          ssh_cmd='ssh -i ~/.ssh/tap -o IdentitiesOnly=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=yes'
+
+          GIT_SSH_COMMAND="$ssh_cmd" git clone git@github.com:partanskiy/homebrew-tap.git "$workdir/tap"
+          install -Dm644 /tmp/brew-rendered/synchrogit.rb "$workdir/tap/Formula/synchrogit.rb"
+
+          git -C "$workdir/tap" config user.name "github-actions[bot]"
+          git -C "$workdir/tap" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$workdir/tap" add Formula/synchrogit.rb
+
+          if git -C "$workdir/tap" diff --cached --quiet; then
+            echo "no changes for synchrogit formula"
+            exit 0
+          fi
+
+          git -C "$workdir/tap" commit -m "synchrogit ${PKGVER}"
+          GIT_SSH_COMMAND="$ssh_cmd" git -C "$workdir/tap" push origin HEAD:main
