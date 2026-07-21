@@ -115,7 +115,41 @@ async fn cycle_is_noop_when_no_changes() {
     let report = sync_cycle(&git, &CycleParams::default()).await;
     assert!(!report.committed);
     assert!(!report.pulled);
+    assert!(!report.pushed, "in-sync cycle must not push: {report:?}");
     assert!(report.error.is_none(), "no error: {report:?}");
+}
+
+#[tokio::test]
+async fn push_skipped_when_remote_up_to_date() {
+    let (_tmp, _remote, a, _b) = setup_pair();
+    let git = Git::new(&a);
+
+    std::fs::write(a.join("note.md"), "first note\n").unwrap();
+    let first = sync_cycle(&git, &CycleParams::default()).await;
+    assert!(first.pushed, "first cycle should push: {first:?}");
+
+    let second = sync_cycle(&git, &CycleParams::default()).await;
+    assert!(
+        !second.pushed,
+        "second cycle has nothing to push: {second:?}"
+    );
+    assert!(second.error.is_none(), "no error: {second:?}");
+
+    // Same skip through the explicit-remote path.
+    let third = sync_cycle(
+        &git,
+        &CycleParams {
+            branch: Some("main"),
+            remote: Some("origin"),
+            ..CycleParams::default()
+        },
+    )
+    .await;
+    assert!(
+        !third.pushed,
+        "explicit-remote cycle has nothing to push: {third:?}"
+    );
+    assert!(third.error.is_none(), "no error: {third:?}");
 }
 
 #[tokio::test]

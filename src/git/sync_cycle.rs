@@ -216,6 +216,10 @@ async fn push_step(git: &Git, target: &SyncTarget) -> std::result::Result<bool, 
             .branch
             .as_deref()
             .ok_or_else(|| "remote target requires a branch".to_string())?;
+        let tracking_ref = format!("{remote}/{branch}");
+        if tracking_matches_head(git, &tracking_ref).await {
+            return Ok(false);
+        }
         let refspec = format!("HEAD:{branch}");
         return run_push(git, ["push", "--quiet", remote.as_str(), refspec.as_str()]).await;
     }
@@ -225,7 +229,22 @@ async fn push_step(git: &Git, target: &SyncTarget) -> std::result::Result<bool, 
         Ok(false) => return Ok(false),
         Err(e) => return Err(format!("upstream probe failed: {e}")),
     }
+    if tracking_matches_head(git, "@{u}").await {
+        return Ok(false);
+    }
     run_push(git, ["push", "--quiet"]).await
+}
+
+// The tracking ref only moves on fetch or push, so matching HEAD means the
+// last known remote state already contains everything local; skipping keeps
+// no-change cycles off the network and out of the `pushed` outcome. Probe
+// failures (e.g. the remote branch does not exist yet) fall through to a real
+// push attempt.
+async fn tracking_matches_head(git: &Git, tracking_ref: &str) -> bool {
+    match (git.head_rev().await, git.rev_parse(tracking_ref).await) {
+        (Ok(head), Ok(tracking)) => head == tracking,
+        _ => false,
+    }
 }
 
 async fn run_push<I, S>(git: &Git, args: I) -> std::result::Result<bool, String>
