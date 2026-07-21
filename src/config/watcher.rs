@@ -36,6 +36,14 @@ fn run_watcher(path: PathBuf, tx: mpsc::UnboundedSender<()>, stop: stdmpsc::Rece
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."))
         .to_path_buf();
+    // FSEvents on macOS reports event paths with symlinks resolved (e.g.
+    // $TMPDIR lives under /var, a symlink to /private/var), so watch and
+    // compare against the canonical parent or events never match the target.
+    let parent = parent.canonicalize().unwrap_or(parent);
+    let path = match path.file_name() {
+        Some(name) => parent.join(name),
+        None => path,
+    };
 
     let (raw_tx, raw_rx) = stdmpsc::channel::<notify::Result<Event>>();
     let mut watcher: RecommendedWatcher = match notify::recommended_watcher(raw_tx) {
