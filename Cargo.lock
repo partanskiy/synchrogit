@@ -754,6 +754,7 @@ dependencies = [
  "clap",
  "gethostname",
  "humantime",
+ "libc",
  "notify",
  "once_cell",
  "serde",
