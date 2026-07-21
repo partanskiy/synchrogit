@@ -65,11 +65,21 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - name: Install musl toolchain
+      - name: Install musl toolchain and lowdown
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends musl-tools
+          sudo apt-get install -y --no-install-recommends musl-tools lowdown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
       - run: cargo build --locked --release --target ${{ matrix.target }}
+      - name: Package .deb and .rpm (release-path validation)
+        run: |
+          mkdir -p target/man dist
+          lowdown -s -Tman docs/synchrogit.1.md -o target/man/synchrogit.1
+          cargo deb --no-build --target ${{ matrix.target }} -o dist/
+          cargo generate-rpm --target ${{ matrix.target }} -o dist/
+          ls -l dist/
 
   msrv:
     name: msrv-check

@@ -44,3 +44,33 @@ shellexpand = "3.1"
 
 [dev-dependencies]
 tempfile = "3.13"
+
+[package.metadata.deb]
+maintainer = "Ilya Partanskiy <partanskiy.im@gmail.com>"
+copyright = "2026, Ilya Partanskiy"
+extended-description = "Watches configured git repositories, commits local changes with timestamp messages, merges remote changes, and pushes — designed for personal sync repositories such as Obsidian vaults."
+section = "vcs"
+priority = "optional"
+depends = "git"
+assets = [
+    ["target/release/synchrogit", "usr/bin/", "755"],
+    ["target/man/synchrogit.1", "usr/share/man/man1/", "644"],
+    ["README.md", "usr/share/doc/synchrogit/", "644"],
+    ["packaging/config.example.toml", "usr/share/doc/synchrogit/", "644"],
+    ["packaging/systemd/synchrogit.service", "usr/lib/systemd/user/", "644"],
+    ["packaging/systemd/synchrogit@.service", "usr/lib/systemd/system/", "644"],
+]
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/synchrogit", dest = "/usr/bin/synchrogit", mode = "755" },
+    { source = "target/man/synchrogit.1", dest = "/usr/share/man/man1/synchrogit.1", mode = "644" },
+    { source = "README.md", dest = "/usr/share/doc/synchrogit/README.md", mode = "644", doc = true },
+    { source = "packaging/config.example.toml", dest = "/usr/share/doc/synchrogit/config.example.toml", mode = "644", doc = true },
+    { source = "LICENSE", dest = "/usr/share/licenses/synchrogit/LICENSE", mode = "644" },
+    { source = "packaging/systemd/synchrogit.service", dest = "/usr/lib/systemd/user/synchrogit.service", mode = "644" },
+    { source = "packaging/systemd/synchrogit@.service", dest = "/usr/lib/systemd/system/synchrogit@.service", mode = "644" },
+]
+
+[package.metadata.generate-rpm.requires]
+git = "*"
