@@ -23,6 +23,6 @@ package() {
   install -Dm644 synchrogit.1 "$pkgdir/usr/share/man/man1/synchrogit.1"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-  install -Dm644 packaging/synchrogit.service "$pkgdir/usr/lib/systemd/user/synchrogit.service"
+  install -Dm644 packaging/systemd/synchrogit.service "$pkgdir/usr/lib/systemd/user/synchrogit.service"
   install -Dm644 packaging/config.example.toml "$pkgdir/usr/share/doc/$pkgname/config.example.toml"
 }
