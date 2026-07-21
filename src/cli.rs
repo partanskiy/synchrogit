@@ -5,7 +5,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::{load, load_from_path, watcher};
 use crate::ipc::protocol::{Request, Response};
-use crate::ipc::{client, default_socket_path, server};
+use crate::ipc::{client, default_socket_path, discover_socket_path, server};
 use crate::runtime::{Supervisor, SupervisorControl};
 
 #[derive(Debug, Parser)]
@@ -145,7 +145,7 @@ fn spawn_reload_watcher(
 }
 
 async fn request_and_print(socket: Option<PathBuf>, request: Request) -> anyhow::Result<()> {
-    let socket = socket.unwrap_or_else(default_socket_path);
+    let socket = socket.unwrap_or_else(discover_socket_path);
     let response = client::request(&socket, request).await?;
     print_response(response)
 }
