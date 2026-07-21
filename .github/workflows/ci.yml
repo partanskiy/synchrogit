@@ -36,8 +36,12 @@ jobs:
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
 
   test:
-    name: test
-    runs-on: ubuntu-24.04
+    name: test (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
