@@ -1,0 +1,44 @@
+Name:           synchrogit
+Version:        @PKGVER@
+Release:        1%{?dist}
+Summary:        Daemon that keeps git repositories synced with their remotes
+License:        MIT
+URL:            https://github.com/partanskiy/synchrogit
+Source0:        %{url}/archive/refs/tags/v%{version}.tar.gz
+
+BuildRequires:  cargo
+BuildRequires:  rust
+BuildRequires:  lowdown
+Requires:       git
+
+%description
+Watches configured git repositories, commits local changes with timestamp
+messages, merges remote changes, and pushes. Designed for personal sync
+repositories such as Obsidian vaults shared across machines.
+
+%prep
+%autosetup -n synchrogit-%{version}
+
+%build
+cargo build --release --locked
+lowdown -s -Tman docs/synchrogit.1.md -o synchrogit.1
+
+%install
+install -Dm755 target/release/synchrogit %{buildroot}%{_bindir}/synchrogit
+install -Dm644 synchrogit.1 %{buildroot}%{_mandir}/man1/synchrogit.1
+install -Dm644 packaging/systemd/synchrogit.service %{buildroot}%{_userunitdir}/synchrogit.service
+install -Dm644 packaging/systemd/synchrogit@.service %{buildroot}%{_unitdir}/synchrogit@.service
+install -Dm644 packaging/config.example.toml %{buildroot}%{_docdir}/synchrogit/config.example.toml
+
+%files
+%license LICENSE
+%doc README.md
+%{_bindir}/synchrogit
+%{_mandir}/man1/synchrogit.1*
+%{_userunitdir}/synchrogit.service
+%{_unitdir}/synchrogit@.service
+%{_docdir}/synchrogit/config.example.toml
+
+%changelog
+* @CHANGELOG_DATE@ Ilya Partanskiy <partanskiy.im@gmail.com> - @PKGVER@-1
+- Automated release build
