@@ -81,6 +81,14 @@ jobs:
           cargo generate-rpm --target ${{ matrix.target }} -o dist/
           ls -l dist/
 
+  nix:
+    name: nix-build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - run: nix build .# --print-build-logs
+
   msrv:
     name: msrv-check
     runs-on: ubuntu-24.04
