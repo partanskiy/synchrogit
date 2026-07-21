@@ -28,12 +28,14 @@ The workflow validates that:
 
 ## Assets
 
-The release workflow publishes Linux tarballs for:
+The release workflow publishes tarballs for:
 
 - `x86_64-unknown-linux-gnu`
 - `aarch64-unknown-linux-gnu`
+- `aarch64-apple-darwin`
+- `x86_64-apple-darwin`
 
-Each tarball has a flat layout:
+Each tarball has a flat layout (`synchrogit.service` is Linux-only):
 
 ```sh
 synchrogit
@@ -56,5 +58,9 @@ After the `Release` workflow completes successfully for a pushed tag, the `Updat
 The workflow needs the `AUR_SSH_PRIVATE_KEY` repository secret.
 
 The `Update AUR` workflow can also be started by hand (workflow dispatch with a `tag` input) when the automatic chain did not run — for example after publishing release assets manually.
+
+## Homebrew
+
+The `Update Homebrew tap` workflow follows the same pattern: after a successful `Release` run it renders `packaging/brew/synchrogit.rb.in` with the macOS tarball URLs and checksums and pushes the formula to [`partanskiy/homebrew-tap`](https://github.com/partanskiy/homebrew-tap). It needs the `TAP_SSH_PRIVATE_KEY` repository secret (a deploy key with write access on the tap repo) and supports the same manual `workflow_dispatch` fallback.
 
 Prerelease tags such as `v0.1.0-rc.1` build GitHub Release artifacts but are skipped by the AUR workflow.

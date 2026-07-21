@@ -79,7 +79,16 @@ The daemon listens on `$XDG_RUNTIME_DIR/synchrogit.sock`. If `XDG_RUNTIME_DIR` i
 
 ## Installation
 
-On Arch Linux, install [`synchrogit`](https://aur.archlinux.org/packages/synchrogit) (builds from source) or [`synchrogit-bin`](https://aur.archlinux.org/packages/synchrogit-bin) (prebuilt binary) from the AUR. On other distributions, grab a binary tarball from [GitHub Releases](https://github.com/partanskiy/synchrogit/releases) or build from source.
+On Arch Linux, install [`synchrogit`](https://aur.archlinux.org/packages/synchrogit) (builds from source) or [`synchrogit-bin`](https://aur.archlinux.org/packages/synchrogit-bin) (prebuilt binary) from the AUR.
+
+On macOS, install from the Homebrew tap and manage the daemon with `brew services` (launchd):
+
+```sh
+brew install partanskiy/tap/synchrogit
+brew services start synchrogit
+```
+
+Elsewhere, grab a binary tarball from [GitHub Releases](https://github.com/partanskiy/synchrogit/releases) or build from source.
 
 ## Building
 
@@ -87,7 +96,7 @@ On Arch Linux, install [`synchrogit`](https://aur.archlinux.org/packages/synchro
 cargo build --locked --release
 ```
 
-Requires Rust 1.94+ (edition 2024) and a recent `git` on PATH.
+Requires Rust 1.94+ (edition 2024) and a recent `git` on PATH. Linux and macOS are supported.
 
 ## Packaging
 
