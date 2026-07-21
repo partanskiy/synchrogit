@@ -24,7 +24,7 @@ Two kinds of messages are accepted:
    release: vMAJOR.MINOR.PATCH[-prerelease][+build]
    ```
 
-   These are accepted for explicit version-bump commits, but GitHub Releases are tag-driven. After the version-bump PR lands on `main`, create and push the matching `vX.Y.Z` tag on the merged commit.
+   Accepted but optional: releases are tag-driven and tags may point at any `main` commit whose `Cargo.toml` matches, so a version bump usually travels as a regular `chore:` commit. See [`RELEASING.md`](RELEASING.md).
 
 Merge / revert / fixup / squash / amend commits are skipped by the linter.
 
