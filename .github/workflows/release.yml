@@ -101,7 +101,8 @@ jobs:
           files=(synchrogit synchrogit.1 README.md LICENSE config.example.toml)
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             cp packaging/systemd/synchrogit.service "$staging/"
-            files+=(synchrogit.service)
+            cp "packaging/systemd/synchrogit@.service" "$staging/"
+            files+=(synchrogit.service "synchrogit@.service")
           fi
 
           tar -C "$staging" -czf "dist/${archive}" "${files[@]}"
