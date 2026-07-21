@@ -122,7 +122,7 @@ See [`docs/operations.md`](docs/operations.md) for day-to-day commands and relea
 
 ## License
 
-GPL-3.0-or-later. See [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).
 
 ## Contributing
 
