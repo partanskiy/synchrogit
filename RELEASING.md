@@ -60,6 +60,15 @@ The workflow needs the `AUR_SSH_PRIVATE_KEY` repository secret.
 
 The `Update AUR` workflow can also be started by hand (workflow dispatch with a `tag` input) when the automatic chain did not run — for example after publishing release assets manually.
 
+## Debian/RPM/APT/COPR
+
+The Linux build jobs also produce `.deb` and `.rpm` packages (via `cargo-deb` and `cargo-generate-rpm`, metadata in `Cargo.toml`) and attach them to the GitHub Release. After a successful `Release` run:
+
+- `Update APT repo` downloads the release `.deb`s, regenerates the flat signed repo, and pushes it to [`partanskiy/apt-repo`](https://github.com/partanskiy/apt-repo) (served via GitHub Pages). Needs the `APT_SSH_PRIVATE_KEY` (deploy key) and `APT_GPG_PRIVATE_KEY` (repo signing key) secrets.
+- `Update COPR` renders `packaging/copr/synchrogit.spec.in`, builds an SRPM, and submits it to the `partanskiy/synchrogit` COPR project. Needs the `COPR_CLI_CONFIG` secret (the `~/.config/copr` API token file); the workflow skips gracefully while the secret is absent.
+
+Both support the same manual `workflow_dispatch` fallback as the AUR and Homebrew publishers. Nix needs no publishing at all — the flake in the repo builds from the tagged source.
+
 ## Homebrew
 
 The `Update Homebrew tap` workflow follows the same pattern: after a successful `Release` run it renders `packaging/brew/synchrogit.rb.in` with the macOS tarball URLs and checksums and pushes the formula to [`partanskiy/homebrew-tap`](https://github.com/partanskiy/homebrew-tap). It needs the `TAP_SSH_PRIVATE_KEY` repository secret (a deploy key with write access on the tap repo) and supports the same manual `workflow_dispatch` fallback.
