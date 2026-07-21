@@ -29,7 +29,7 @@ pub async fn resolve_conflicts(git: &Git, template: &str, host: &str) -> Result<
     for f_bytes in files {
         let f = std::str::from_utf8(f_bytes)
             .map_err(|_| SynchrogitError::Other("non-utf8 conflict path".into()))?;
-        let copy_rel = format!("{f}.conflict-{host}-{suffix}");
+        let copy_rel = conflict_copy_path(f, host, &suffix);
 
         // Extract the local-HEAD version as bytes. Some odd states (e.g.
         // added-by-them / deleted-by-us) have no `:2:` entry; tolerate by
@@ -63,6 +63,19 @@ pub async fn resolve_conflicts(git: &Git, template: &str, host: &str) -> Result<
     Ok(saved)
 }
 
+// The conflict marker goes before the file extension, not after it, so the
+// copy keeps the original type and stays visible to extension-filtering tools
+// (Obsidian only indexes known extensions, editors keep syntax highlighting).
+fn conflict_copy_path(f: &str, host: &str, suffix: &str) -> String {
+    match std::path::Path::new(f).extension().and_then(|e| e.to_str()) {
+        Some(ext) => {
+            let stem = &f[..f.len() - ext.len() - 1];
+            format!("{stem}.conflict-{host}-{suffix}.{ext}")
+        }
+        None => format!("{f}.conflict-{host}-{suffix}"),
+    }
+}
+
 async fn capture_show(git: &Git, spec: &str) -> Result<Vec<u8>> {
     let mut cmd = Command::new("git");
     cmd.arg("-C")
@@ -85,5 +98,42 @@ async fn capture_show(git: &Git, spec: &str) -> Result<Vec<u8>> {
         Err(SynchrogitError::Other(
             String::from_utf8_lossy(&out.stderr).into_owned(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::conflict_copy_path;
+
+    #[test]
+    fn extension_moves_after_conflict_marker() {
+        assert_eq!(
+            conflict_copy_path("note.md", "acchan", "20260721-144423"),
+            "note.conflict-acchan-20260721-144423.md"
+        );
+        assert_eq!(
+            conflict_copy_path("02_KB/Git/Git - Head.md", "acchan", "s"),
+            "02_KB/Git/Git - Head.conflict-acchan-s.md"
+        );
+    }
+
+    #[test]
+    fn no_extension_appends_marker() {
+        assert_eq!(
+            conflict_copy_path("Makefile", "h", "s"),
+            "Makefile.conflict-h-s"
+        );
+        assert_eq!(
+            conflict_copy_path(".gitignore", "h", "s"),
+            ".gitignore.conflict-h-s"
+        );
+    }
+
+    #[test]
+    fn dot_in_directory_is_not_an_extension() {
+        assert_eq!(
+            conflict_copy_path("dir.d/README", "h", "s"),
+            "dir.d/README.conflict-h-s"
+        );
     }
 }
