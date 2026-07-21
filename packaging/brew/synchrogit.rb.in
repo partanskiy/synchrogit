@@ -1,0 +1,35 @@
+class Synchrogit < Formula
+  desc "Daemon that keeps git repositories synced with their remotes"
+  homepage "@REPO_URL@"
+  version "@PKGVER@"
+  license "GPL-3.0-or-later"
+
+  depends_on "git"
+  depends_on :macos
+
+  on_arm do
+    url "@MAC_ARM64_URL@"
+    sha256 "@MAC_ARM64_SHA256@"
+  end
+  on_intel do
+    url "@MAC_X86_64_URL@"
+    sha256 "@MAC_X86_64_SHA256@"
+  end
+
+  def install
+    bin.install "synchrogit"
+    man1.install "synchrogit.1"
+    doc.install "README.md", "config.example.toml"
+  end
+
+  service do
+    run [opt_bin/"synchrogit", "run"]
+    keep_alive true
+    log_path var/"log/synchrogit.log"
+    error_log_path var/"log/synchrogit.log"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/synchrogit --version")
+  end
+end
