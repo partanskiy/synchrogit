@@ -5,7 +5,7 @@ pkgrel=1
 pkgdesc='Daemon that keeps git repositories synced with their remotes (prebuilt binary)'
 arch=('x86_64' 'aarch64')
 url='@REPO_URL@'
-license=('GPL-3.0-or-later')
+license=('MIT')
 depends=('git')
 provides=("synchrogit=$pkgver")
 conflicts=('synchrogit')
