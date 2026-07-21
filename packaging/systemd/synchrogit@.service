@@ -1,0 +1,18 @@
+[Unit]
+Description=Synchronize %i's Git repositories
+Documentation=https://github.com/partanskiy/synchrogit
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+RuntimeDirectory=synchrogit/%i
+Environment=SYNCHROGIT_SOCKET=/run/synchrogit/%i/synchrogit.sock
+Environment=RUST_LOG=info
+ExecStart=/usr/bin/synchrogit run
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

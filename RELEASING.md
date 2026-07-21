@@ -35,7 +35,7 @@ The release workflow publishes tarballs for:
 - `aarch64-apple-darwin`
 - `x86_64-apple-darwin`
 
-Each tarball has a flat layout (`synchrogit.service` is Linux-only):
+Each tarball has a flat layout (the systemd units are Linux-only):
 
 ```sh
 synchrogit
@@ -43,6 +43,7 @@ synchrogit.1
 README.md
 LICENSE
 synchrogit.service
+synchrogit@.service
 config.example.toml
 ```
 
