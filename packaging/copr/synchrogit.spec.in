@@ -9,6 +9,7 @@ Source0:        %{url}/archive/refs/tags/v%{version}.tar.gz
 BuildRequires:  cargo
 BuildRequires:  rust
 BuildRequires:  lowdown
+BuildRequires:  systemd-rpm-macros
 Requires:       git
 
 %description
