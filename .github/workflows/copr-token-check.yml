@@ -1,0 +1,31 @@
+name: COPR token check
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auth-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify the COPR token still authenticates
+        env:
+          COPR_CLI_CONFIG: ${{ secrets.COPR_CLI_CONFIG }}
+        run: |
+          if [[ -z "$COPR_CLI_CONFIG" ]]; then
+            echo "COPR_CLI_CONFIG secret is not set" >&2
+            exit 1
+          fi
+          login=$(awk '$1 == "login" { print $3 }' <<<"$COPR_CLI_CONFIG")
+          token=$(awk '$1 == "token" { print $3 }' <<<"$COPR_CLI_CONFIG")
+          code=$(curl -s -o /dev/null -w '%{http_code}' -u "$login:$token" https://copr.fedorainfracloud.org/api_3/auth-check)
+          if [[ "$code" != "200" ]]; then
+            echo "COPR auth-check returned $code — the API token has likely expired." >&2
+            echo "Renew it at https://copr.fedorainfracloud.org/api/ and update the COPR_CLI_CONFIG secret." >&2
+            exit 1
+          fi
+          echo "COPR token is valid"
