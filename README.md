@@ -88,14 +88,15 @@ The daemon listens on `$XDG_RUNTIME_DIR/synchrogit.sock`. If `XDG_RUNTIME_DIR` i
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/synchrogit.svg)](https://repology.org/project/synchrogit/versions)
 
-| Platform | Install |
-| --- | --- |
-| Arch Linux | `paru -S synchrogit-bin` (prebuilt) or `paru -S synchrogit` (from source) |
-| macOS | `brew install partanskiy/tap/synchrogit` |
-| Debian/Ubuntu | signed APT repo — [see below](#debianubuntu) |
-| Fedora | `sudo dnf copr enable partanskiy/synchrogit && sudo dnf install synchrogit` |
-| Nix | `nix profile install github:partanskiy/synchrogit` |
-| Anything else | static `.deb` / `.rpm` / tarball from [Releases](https://github.com/partanskiy/synchrogit/releases/latest) |
+| OS / Distro | Package manager | Command | Version |
+| --- | --- | --- | --- |
+| Arch Linux | pacman ([AUR](https://aur.archlinux.org/packages/synchrogit-bin), prebuilt) | `paru -S synchrogit-bin` | ![aur bin](https://img.shields.io/aur/version/synchrogit-bin?label=) |
+| Arch Linux | pacman ([AUR](https://aur.archlinux.org/packages/synchrogit), from source) | `paru -S synchrogit` | ![aur](https://img.shields.io/aur/version/synchrogit?label=) |
+| macOS | [Homebrew tap](https://github.com/partanskiy/homebrew-tap) | `brew install partanskiy/tap/synchrogit` | ![brew tap](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpartanskiy%2Fhomebrew-tap%2Fmain%2FFormula%2Fsynchrogit.rb&search=version%20%22(%5B%5E%22%5D%2B)%22&label=) |
+| Debian / Ubuntu | [APT repo](https://github.com/partanskiy/apt-repo) ([setup](#debianubuntu)) | `sudo apt install synchrogit` | ![apt](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fpartanskiy.github.io%2Fapt-repo%2FPackages&search=Version%3A%20(%5CS%2B)&label=) |
+| Fedora | dnf (COPR) | `sudo dnf copr enable partanskiy/synchrogit` | ![copr](https://img.shields.io/badge/-coming%20soon-lightgrey) |
+| NixOS / any | Nix flake | `nix profile install github:partanskiy/synchrogit` | ![nix](https://img.shields.io/github/v/release/partanskiy/synchrogit?label=) |
+| Any Linux | manual | `.deb` / `.rpm` / tarball from [Releases](https://github.com/partanskiy/synchrogit/releases/latest) | ![release](https://img.shields.io/github/v/release/partanskiy/synchrogit?label=) |
 
 ### Arch Linux
 
