@@ -33,7 +33,7 @@ Around the cycle:
 | Arch Linux | pacman ([AUR](https://aur.archlinux.org/packages/synchrogit), from source) | `paru -S synchrogit` | ![aur](https://img.shields.io/aur/version/synchrogit?label=) |
 | macOS | [Homebrew tap](https://github.com/partanskiy/homebrew-tap) | `brew install partanskiy/tap/synchrogit` | ![brew tap](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpartanskiy%2Fhomebrew-tap%2Fmain%2FFormula%2Fsynchrogit.rb&search=version%20%22(%5B%5E%22%5D%2B)%22&label=) |
 | Debian / Ubuntu | [APT repo](https://github.com/partanskiy/apt-repo) ([setup](#debian--ubuntu)) | `sudo apt install synchrogit` | ![apt](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fpartanskiy.github.io%2Fapt-repo%2FPackages&search=Version%3A%20(%5CS%2B)&label=) |
-| Fedora | dnf (COPR) | `sudo dnf copr enable partanskiy/synchrogit` | ![copr](https://img.shields.io/badge/-coming%20soon-lightgrey) |
+| Fedora | dnf (COPR) | `sudo dnf copr enable partanskiy/synchrogit` | ![copr](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fcopr.fedorainfracloud.org%2Fapi_3%2Fpackage%3Fownername%3Dpartanskiy%26projectname%3Dsynchrogit%26packagename%3Dsynchrogit%26with_latest_build%3DTrue&query=%24.builds.latest.source_package.version&label=) |
 | NixOS / any | Nix flake | `nix profile install github:partanskiy/synchrogit` | ![nix](https://img.shields.io/github/v/release/partanskiy/synchrogit?label=) |
 | Any Linux | manual | `.deb` / `.rpm` / tarball from [Releases](https://github.com/partanskiy/synchrogit/releases/latest) | ![release](https://img.shields.io/github/v/release/partanskiy/synchrogit?label=) |
 
