@@ -65,9 +65,9 @@ The `Update AUR` workflow can also be started by hand (workflow dispatch with a 
 The Linux build jobs also produce `.deb` and `.rpm` packages (via `cargo-deb` and `cargo-generate-rpm`, metadata in `Cargo.toml`) and attach them to the GitHub Release. After a successful `Release` run:
 
 - `Update APT repo` downloads the release `.deb`s, regenerates the flat signed repo, and pushes it to [`partanskiy/apt-repo`](https://github.com/partanskiy/apt-repo) (served via GitHub Pages). Needs the `APT_SSH_PRIVATE_KEY` (deploy key) and `APT_GPG_PRIVATE_KEY` (repo signing key) secrets.
-- `Update COPR` renders `packaging/copr/synchrogit.spec.in`, builds an SRPM, and submits it to the `partanskiy/synchrogit` COPR project. Needs the `COPR_CLI_CONFIG` secret (the `~/.config/copr` API token file); the workflow skips gracefully while the secret is absent.
+- COPR builds itself, with no credentials in this repository: the [`partanskiy/synchrogit`](https://copr.fedorainfracloud.org/coprs/partanskiy/synchrogit/) COPR project uses a *custom source method* — a script stored in the project settings that resolves the latest GitHub release, downloads its tarball, and renders `packaging/copr/synchrogit.spec.in` **from `main`** (so packaging fixes do not require a re-tag). A GitHub webhook on this repository triggers the rebuild on every push. Nothing expires; re-trigger manually with `copr-cli build-package synchrogit --name synchrogit` if ever needed.
 
-Both support the same manual `workflow_dispatch` fallback as the AUR and Homebrew publishers. Nix needs no publishing at all — the flake in the repo builds from the tagged source.
+The APT workflow supports the same manual `workflow_dispatch` fallback as the AUR and Homebrew publishers. Nix needs no publishing at all — the flake in the repo builds from the tagged source.
 
 ## Homebrew
 
