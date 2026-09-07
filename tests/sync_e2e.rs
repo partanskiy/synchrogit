@@ -109,6 +109,89 @@ async fn conflict_keeps_remote_and_saves_local_copy() {
 }
 
 #[tokio::test]
+async fn remote_deletion_keeps_only_local_conflict_copy_across_cycles() {
+    let (_tmp, remote, a, b) = setup_pair();
+    std::fs::create_dir(b.join("notes")).unwrap();
+    common::commit_file(&b, "notes/shared note.md", "base\n", "feat: base");
+    common::run_git(&b, &["push", "-q"]);
+    common::run_git(&a, &["pull", "-q"]);
+
+    // The remote deletes a file while A has uncommitted edits to it.
+    common::run_git(&b, &["rm", "--", "notes/shared note.md"]);
+    common::run_git(&b, &["commit", "-q", "-m", "feat: delete note"]);
+    common::run_git(&b, &["push", "-q"]);
+    std::fs::write(a.join("notes/shared note.md"), "local edit\n").unwrap();
+
+    let git_a = Git::new(&a);
+    let report = sync_cycle(&git_a, &CycleParams::default()).await;
+    assert!(report.failure_message().is_none(), "{report:?}");
+    assert!(
+        report.committed && report.conflict && report.pushed,
+        "{report:?}"
+    );
+    assert!(!a.join("notes/shared note.md").exists());
+    assert!(!a.join(".git/MERGE_HEAD").exists());
+    assert!(common::git_stdout(&a, &["status", "--porcelain"]).is_empty());
+
+    let copies: Vec<_> = std::fs::read_dir(a.join("notes"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    assert_eq!(copies.len(), 1, "only the conflict copy should remain");
+    let copy = format!("notes/{}", copies[0]);
+    assert!(copies[0].starts_with("shared note.conflict-"));
+    assert!(copies[0].ends_with(".md"));
+    assert_eq!(std::fs::read(a.join(&copy)).unwrap(), b"local edit\n");
+    assert_eq!(
+        common::git_stdout(&remote, &["ls-tree", "-r", "--name-only", "main"]),
+        format!("README.md\n{copy}\n")
+    );
+
+    // Further cycles on either clone must not resurrect the original file.
+    let next = sync_cycle(&git_a, &CycleParams::default()).await;
+    assert!(next.failure_message().is_none(), "{next:?}");
+    assert!(!next.committed && !next.pulled && !next.pushed, "{next:?}");
+    let report_b = sync_cycle(&Git::new(&b), &CycleParams::default()).await;
+    assert!(report_b.failure_message().is_none(), "{report_b:?}");
+    assert!(!a.join("notes/shared note.md").exists());
+    assert!(!b.join("notes/shared note.md").exists());
+    assert_eq!(std::fs::read(b.join(&copy)).unwrap(), b"local edit\n");
+    assert_eq!(
+        common::git_stdout(&remote, &["ls-tree", "-r", "--name-only", "main"]),
+        format!("README.md\n{copy}\n")
+    );
+}
+
+#[tokio::test]
+async fn local_deletion_keeps_remote_edit_without_a_conflict_copy() {
+    let (_tmp, _remote, a, b) = setup_pair();
+    common::commit_file(&b, "shared.md", "base\n", "feat: base");
+    common::run_git(&b, &["push", "-q"]);
+    common::run_git(&a, &["pull", "-q"]);
+
+    common::commit_file(&b, "shared.md", "remote edit\n", "feat: edit note");
+    common::run_git(&b, &["push", "-q"]);
+    std::fs::remove_file(a.join("shared.md")).unwrap();
+
+    let report = sync_cycle(&Git::new(&a), &CycleParams::default()).await;
+    assert!(report.failure_message().is_none(), "{report:?}");
+    assert!(
+        report.committed && report.conflict && report.pushed,
+        "{report:?}"
+    );
+    assert_eq!(
+        std::fs::read(a.join("shared.md")).unwrap(),
+        b"remote edit\n"
+    );
+    assert!(!a.join(".git/MERGE_HEAD").exists());
+    assert!(common::git_stdout(&a, &["status", "--porcelain"]).is_empty());
+    assert_eq!(
+        common::git_stdout(&a, &["ls-files"]),
+        "README.md\nshared.md\n"
+    );
+}
+
+#[tokio::test]
 async fn cycle_is_noop_when_no_changes() {
     let (_tmp, _remote, a, _b) = setup_pair();
     let git = Git::new(&a);

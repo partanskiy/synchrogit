@@ -70,7 +70,9 @@ ignore = [".direnv/**", "target/**"]
 When a merge conflict happens, `synchrogit` keeps the remote version in place and saves the local version next to it as:
 
 ```text
-<file>.conflict-<host>-<timestamp>
+note.conflict-<host>-<timestamp>.md
 ```
 
-The conflict copy is added to git when it is not ignored, then the merge is committed.
+The marker goes before the file extension. The conflict copy is added to git when it is not ignored, then the merge is committed.
+
+If a file was deleted on the remote and edited locally, only the conflict copy remains; the original file stays deleted. If it was deleted locally and edited on the remote, the remote file is restored without a conflict copy because there is no local file content to preserve.
