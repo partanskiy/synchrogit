@@ -1,10 +1,13 @@
 package dev.synchrogit.app
 
+import android.content.Intent
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.zip.ZipInputStream
@@ -16,6 +19,8 @@ class NativeSyncTest {
 
     @Test fun nativeSyncPreservesEditsConflictsAndRemoteDeletions() {
         val root = File(context.cacheDir, "sync-test-${System.nanoTime()}").apply { mkdirs() }
+        val store = SettingsStore(context)
+        val originalConfig = store.configFile.takeIf { it.exists() }?.readBytes()
         try {
             val assets = InstrumentationRegistry.getInstrumentation().context.assets
             ZipInputStream(assets.open("sync-fixture.zip")).use { zip ->
@@ -31,9 +36,14 @@ class NativeSyncTest {
                 val file = File(root, "$name/.git/config")
                 file.writeText(file.readText().replace("SYNCHROGIT_TEST_REMOTE", File(root, "remote.git").absolutePath))
             }
+            fun configText(path: File, watch: Boolean = false): String {
+                val settings = JSONObject().put("repo", JSONArray().put(JSONObject().put("path", path.absolutePath)))
+                if (watch) settings.put("defaults", JSONObject().put("interval", "1h").put("debounce", "50ms"))
+                return call("encode_config", JSONObject().put("settings", settings)).getString("config")
+            }
             fun cycle(name: String) {
                 val config = File(root, "$name.toml")
-                config.writeText("[[repo]]\npath = ${JSONObject.quote(File(root, name).absolutePath)}\n")
+                config.writeText(configText(File(root, name)))
                 call("once", JSONObject().put("path", config.absolutePath))
             }
             val a = File(root, "a"); val b = File(root, "b")
@@ -58,22 +68,39 @@ class NativeSyncTest {
             assertFalse(File(a, ".git/MERGE_HEAD").exists())
 
             val config = File(root, "watch.toml")
-            config.writeText("[defaults]\ninterval = '1h'\ndebounce = '50ms'\n[[repo]]\npath = ${JSONObject.quote(a.absolutePath)}\n")
-            call("start", JSONObject().put("path", config.absolutePath))
-            Thread.sleep(500)
-            File(a, "watched.md").writeText("filesystem event\n")
-            var observed = false
-            for (attempt in 0 until 100) {
-                Thread.sleep(100)
-                // A separate one-shot cycle would mask a broken watcher, so
-                // observe the worker's commit timestamp/outcome instead.
-                val last = call("status").getJSONArray("repos").getJSONObject(0).getJSONObject("last_sync")
-                if (last.optString("last_outcome") == "pushed") { observed = true; break }
+            config.writeText(configText(a, watch = true))
+            store.configFile.writeText(config.readText())
+            ActivityScenario.launch(MainActivity::class.java).use { activity ->
+                activity.onActivity { it.startForegroundService(Intent(it, SyncService::class.java)) }
+                for (attempt in 0 until 100) {
+                    if (call("status").optBoolean("running")) break
+                    Thread.sleep(100)
+                }
+                assertTrue("foreground service should start the Rust engine", call("status").getBoolean("running"))
+                Thread.sleep(500)
+                File(a, "watched.md").writeText("filesystem event\n")
+                var observed = false
+                for (attempt in 0 until 100) {
+                    Thread.sleep(100)
+                    val last = call("status").getJSONArray("repos").getJSONObject(0).getJSONObject("last_sync")
+                    if (last.optString("last_outcome") == "pushed") { observed = true; break }
+                }
+                assertTrue("local file edit should trigger the Rust watcher", observed)
+                activity.onActivity { it.stopService(Intent(it, SyncService::class.java)) }
+                for (attempt in 0 until 100) {
+                    if (!call("status").optBoolean("running")) break
+                    Thread.sleep(100)
+                }
+                assertFalse("stopping the service should stop the Rust engine", call("status").getBoolean("running"))
             }
-            assertTrue("local file edit should trigger the Rust watcher", observed)
-            call("stop"); cycle("b")
+            cycle("b")
             assertEquals("filesystem event\n", File(b, "watched.md").readText())
-        } finally { call("stop"); root.deleteRecursively() }
+        } finally {
+            context.stopService(Intent(context, SyncService::class.java))
+            call("stop")
+            if (originalConfig == null) store.configFile.delete() else store.configFile.writeBytes(originalConfig)
+            root.deleteRecursively()
+        }
     }
 
     @Test fun httpsCloneUsesAndroidTrustStore() {

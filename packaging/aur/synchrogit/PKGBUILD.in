@@ -9,7 +9,7 @@ depends=('git')
 makedepends=('cargo' 'lowdown' 'perl')
 # Rust enables its own LTO. GCC LTO objects from vendored C libraries cannot
 # be linked by Rust's lld, so disable makepkg's additional cross-language LTO.
-options=('!lto')
+options=('!lto' '!debug')
 source=("$pkgname-$pkgver.tar.gz::@SOURCE_URL@")
 sha256sums=('@SOURCE_SHA256@')
 
