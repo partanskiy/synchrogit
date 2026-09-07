@@ -2,14 +2,13 @@ use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
+use super::connection::handle_connection;
 use crate::error::{Result, SynchrogitError};
-use crate::ipc::protocol::{Request, Response};
 use crate::runtime::SupervisorControl;
 
 pub struct ServerHandle {
@@ -92,48 +91,4 @@ async fn serve(
     }
     info!("ipc server stopped");
     Ok(())
-}
-
-async fn handle_connection(stream: UnixStream, control: SupervisorControl) -> Result<()> {
-    let mut reader = BufReader::new(stream);
-    let mut line = String::new();
-    let n = reader.read_line(&mut line).await?;
-    if n == 0 {
-        return Ok(());
-    }
-
-    let response = match serde_json::from_str::<Request>(line.trim_end()) {
-        Ok(request) => handle_request(request, &control).await,
-        Err(e) => Response::error(format!("invalid request: {e}")),
-    };
-
-    let mut stream = reader.into_inner();
-    let payload = serde_json::to_vec(&response)?;
-    stream.write_all(&payload).await?;
-    stream.write_all(b"\n").await?;
-    stream.flush().await?;
-    Ok(())
-}
-
-async fn handle_request(request: Request, control: &SupervisorControl) -> Response {
-    match request {
-        Request::Ping => Response::Pong,
-        Request::Status => Response::Status {
-            repos: control.status(),
-        },
-        Request::Sync { repo } => match control.sync(repo.as_deref()).await {
-            Ok(queued) => Response::Synced { queued },
-            Err(e) => Response::error(e),
-        },
-        Request::Reload => match control.reload().await {
-            Ok(report) => Response::Reloaded {
-                ok: true,
-                message: report.message(),
-            },
-            Err(e) => Response::Reloaded {
-                ok: false,
-                message: e,
-            },
-        },
-    }
 }

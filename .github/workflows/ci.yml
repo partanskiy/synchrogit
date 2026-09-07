@@ -40,13 +40,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-24.04, macos-15]
+        runner: [ubuntu-24.04, macos-15, windows-2025]
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all --locked
+      - name: Test embedded Git backend
+        run: cargo test --all --locked
+        env:
+          SYNCHROGIT_GIT_BACKEND: embedded
 
   build:
     name: build (${{ matrix.target }})

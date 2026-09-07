@@ -17,6 +17,8 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Show the selected Git implementation and executable path.
+    Backend,
     /// Run the sync daemon for all repositories in the config file.
     Run(RunArgs),
 
@@ -36,14 +38,14 @@ pub struct RunArgs {
     #[arg(long, env = "SYNCHROGIT_CONFIG")]
     pub config: Option<PathBuf>,
 
-    /// Unix socket path for CLI control commands.
+    /// Control endpoint (Unix socket or Windows named pipe) for CLI control commands.
     #[arg(long, env = "SYNCHROGIT_SOCKET")]
     pub socket: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
 pub struct ClientArgs {
-    /// Unix socket path for daemon control.
+    /// Control endpoint (Unix socket or Windows named pipe) for daemon control.
     #[arg(long, env = "SYNCHROGIT_SOCKET")]
     pub socket: Option<PathBuf>,
 }
@@ -53,13 +55,20 @@ pub struct SyncArgs {
     /// Optional repo name. If omitted, all repos are queued.
     pub repo: Option<String>,
 
-    /// Unix socket path for daemon control.
+    /// Control endpoint (Unix socket or Windows named pipe) for daemon control.
     #[arg(long, env = "SYNCHROGIT_SOCKET")]
     pub socket: Option<PathBuf>,
 }
 
 pub async fn dispatch(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
+        Command::Backend => {
+            println!(
+                "{}",
+                crate::git::Git::new(std::env::current_dir()?).backend_name()?
+            );
+            Ok(())
+        }
         Command::Run(args) => run(args).await,
         Command::Status(args) => request_and_print(args.socket, Request::Status).await,
         Command::Sync(args) => {
@@ -96,6 +105,17 @@ async fn wait_for_shutdown(
     reload_watcher: tokio::task::JoinHandle<()>,
     cancel: CancellationToken,
 ) -> anyhow::Result<()> {
+    shutdown_signal().await?;
+    tracing::info!("shutting down");
+    cancel.cancel();
+    let _ = ipc.join.await;
+    let _ = reload_watcher.await;
+    supervisor.shutdown().await;
+    Ok(())
+}
+
+#[cfg(unix)]
+async fn shutdown_signal() -> std::io::Result<()> {
     use tokio::signal::unix::{SignalKind, signal};
     let mut sigint = signal(SignalKind::interrupt())?;
     let mut sigterm = signal(SignalKind::terminate())?;
@@ -103,11 +123,18 @@ async fn wait_for_shutdown(
         _ = sigint.recv() => {},
         _ = sigterm.recv() => {},
     }
-    tracing::info!("shutting down");
-    cancel.cancel();
-    let _ = ipc.join.await;
-    let _ = reload_watcher.await;
-    supervisor.shutdown().await;
+    Ok(())
+}
+
+#[cfg(windows)]
+async fn shutdown_signal() -> std::io::Result<()> {
+    let mut close = tokio::signal::windows::ctrl_close()?;
+    let mut shutdown = tokio::signal::windows::ctrl_shutdown()?;
+    tokio::select! {
+        result = tokio::signal::ctrl_c() => result?,
+        _ = close.recv() => (),
+        _ = shutdown.recv() => (),
+    }
     Ok(())
 }
 

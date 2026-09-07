@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use std::collections::HashSet;
 use std::env;
 use std::fs;
@@ -61,6 +62,7 @@ pub fn parse_str(source: &str) -> Result<Config> {
     raw.try_into()
 }
 
+#[cfg(unix)]
 pub fn config_candidates() -> Vec<PathBuf> {
     let home = env::var_os("HOME").map(PathBuf::from);
     let xdg = env::var_os("XDG_CONFIG_HOME").and_then(|v| {
@@ -73,6 +75,7 @@ pub fn config_candidates() -> Vec<PathBuf> {
     config_candidates_from(home.as_deref(), xdg.as_deref())
 }
 
+#[cfg(unix)]
 fn config_candidates_from(home: Option<&Path>, xdg_config_home: Option<&Path>) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
 
@@ -217,7 +220,7 @@ fn infer_name(path: &Path) -> String {
         .unwrap_or_else(|| "repo".to_string())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
@@ -234,4 +237,18 @@ mod tests {
             ]
         );
     }
+}
+
+#[cfg(windows)]
+pub fn config_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    for variable in ["APPDATA", "LOCALAPPDATA"] {
+        if let Some(path) = env::var_os(variable).filter(|p| !p.is_empty()) {
+            candidates.push(PathBuf::from(path).join("synchrogit/config.toml"));
+        }
+    }
+    if let Some(path) = env::var_os("USERPROFILE") {
+        candidates.push(PathBuf::from(path).join(".config/synchrogit/config.toml"));
+    }
+    candidates
 }
