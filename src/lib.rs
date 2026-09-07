@@ -15,3 +15,8 @@ pub mod util;
 pub mod worker;
 
 pub use error::{Result, SynchrogitError};
+
+#[cfg(all(target_os = "android", feature = "embedded-git"))]
+mod android;
+#[cfg(feature = "embedded-git")]
+pub mod mobile;
