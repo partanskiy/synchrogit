@@ -41,3 +41,8 @@ The same CLI commands work on Windows. The default configuration is
 or TOML literal strings for backslashes. Control commands use an owner-only local
 named pipe; `--socket` accepts an alternate pipe name. Git subprocesses do not
 open console windows.
+
+The Windows ZIP includes an optional Install-MinGit.ps1, which downloads the
+unmodified official MinGit archive and checks its pinned SHA-256. The default
+Windows ZIP uses the embedded fallback immediately, without a network install.
+MinGit's full original directory layout and licenses are retained when installed.

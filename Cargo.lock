@@ -1092,7 +1092,7 @@ dependencies = [
 
 [[package]]
 name = "synchrogit"
-version = "26.7.7"
+version = "26.9.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1101,8 +1101,10 @@ dependencies = [
  "humantime",
  "jni",
  "libc",
+ "libgit2-sys",
  "notify",
  "once_cell",
+ "openssl-sys",
  "serde",
  "serde_json",
  "shellexpand",

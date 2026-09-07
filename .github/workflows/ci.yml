@@ -52,6 +52,28 @@ jobs:
         env:
           SYNCHROGIT_GIT_BACKEND: embedded
 
+  windows-package:
+    name: Windows archive
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked --release
+      - name: Package and inspect scripts
+        shell: pwsh
+        run: |
+          Get-ChildItem packaging/windows/*.ps1 | ForEach-Object {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) { throw $errors }
+          }
+          ./scripts/package-windows.ps1 -Version 'ci'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synchrogit-windows
+          path: dist/*
+
   build:
     name: build (${{ matrix.target }})
     strategy:
@@ -101,3 +123,31 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.94
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --locked
+
+  arch:
+    name: Arch package
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - run: pacman -Syu --noconfirm --needed rust git lowdown perl
+      - uses: actions/checkout@v4
+      - name: Build and inspect the source package
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          mkdir -p /tmp/arch-package
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git archive --prefix="synchrogit-$version/" HEAD > "/tmp/arch-package/synchrogit-$version.tar"
+          gzip "/tmp/arch-package/synchrogit-$version.tar"
+          sed -e "s|@PKGVER@|$version|g" \
+              -e 's|@REPO_URL@|https://github.com/partanskiy/synchrogit|g' \
+              -e "s|@SOURCE_URL@|synchrogit-$version.tar.gz|g" \
+              -e "s|@SOURCE_SHA256@|$(sha256sum /tmp/arch-package/*.tar.gz | cut -d' ' -f1)|g" \
+              packaging/aur/synchrogit/PKGBUILD.in > /tmp/arch-package/PKGBUILD
+          # Local fixture source, avoiding an unpublished tag during PR builds.
+          sed -i 's|::synchrogit-|::file:///tmp/arch-package/synchrogit-|' /tmp/arch-package/PKGBUILD
+          chown -R nobody:nobody /tmp/arch-package
+          runuser -u nobody -- env CARGO_HOME=/tmp/arch-package/.cargo sh -c 'cd /tmp/arch-package && makepkg --noconfirm --cleanbuild'
+          pacman -U --noconfirm /tmp/arch-package/*.pkg.tar.zst
+          synchrogit --version
+          SYNCHROGIT_GIT_BACKEND=embedded synchrogit backend
+          pacman -Ql synchrogit

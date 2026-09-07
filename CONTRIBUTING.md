@@ -47,7 +47,16 @@ cargo test --all --locked
 cargo build --locked --release
 ```
 
-All four must pass for CI to be green.
+All four must pass for CI to be green. Changes to the Git implementation also
+run the suite with `SYNCHROGIT_GIT_BACKEND=embedded`; CI checks both backends on
+Linux, macOS and Windows. Arch source packages, musl deb/rpm packages and Nix are
+validated in CI.
+
+For Android changes, also build both native ABIs, run Android Lint and the
+instrumentation suite described in [android/README.md](android/README.md). The
+Android workflow runs the JNI, Git, credential and UI tests in an emulator.
+The device-specific background behavior must also be checked on real hardware
+before claiming a particular phone's continuous synchronization is reliable.
 
 ## Releasing
 

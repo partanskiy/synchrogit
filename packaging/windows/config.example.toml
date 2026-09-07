@@ -1,0 +1,10 @@
+[defaults]
+interval = "15s"
+debounce = "2s"
+git-timeout = "60s"
+
+[[repo]]
+name = "notes"
+path = 'C:\Users\yourname\Notes'
+remote = "origin"
+branch = "main"

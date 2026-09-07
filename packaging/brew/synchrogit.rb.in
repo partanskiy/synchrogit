@@ -19,7 +19,7 @@ class Synchrogit < Formula
   def install
     bin.install "synchrogit"
     man1.install "synchrogit.1"
-    doc.install "README.md", "config.example.toml"
+    doc.install "README.md", "config.example.toml", "THIRD_PARTY_LICENSES.html"
   end
 
   service do

@@ -10,7 +10,8 @@ Tags go on whatever `main` commit is being released — there is no dedicated re
 
 1. Make sure `Cargo.toml` on `main` matches the version being released.
 2. Create an annotated tag on the chosen `main` commit and push it.
-3. Let the release workflow build and publish binary tarballs.
+3. Let the release workflow build and publish desktop archives, Linux packages and the signed Android APK.
+4. Confirm Update AUR (both packages), Update APT repo and Update Homebrew tap succeed; check the latest COPR build too.
 
 ```sh
 git fetch origin
@@ -74,3 +75,34 @@ The APT workflow supports the same manual `workflow_dispatch` fallback as the AU
 The `Update Homebrew tap` workflow follows the same pattern: after a successful `Release` run it renders `packaging/brew/synchrogit.rb.in` with the macOS tarball URLs and checksums and pushes the formula to [`partanskiy/homebrew-tap`](https://github.com/partanskiy/homebrew-tap). It needs the `TAP_SSH_PRIVATE_KEY` repository secret (a deploy key with write access on the tap repo) and supports the same manual `workflow_dispatch` fallback.
 
 Prerelease tags such as `v0.1.0-rc.1` build GitHub Release artifacts but are skipped by the AUR workflow.
+
+## Windows and Android
+
+Windows x86_64 is published as a ZIP containing the executable, example config,
+optional MinGit installer, startup scripts and licenses. CI builds this archive
+and runs the daemon/control tests on Windows with both Git backends.
+
+Android uses the stable asset name `synchrogit-android.apk` for Obtainium and a
+stable application ID `dev.synchrogit.app`. Debug builds use `.debug` and cannot
+replace a release installation. Release signing requires the repository secrets
+`ANDROID_KEYSTORE_BASE64` and `ANDROID_KEYSTORE_PASSWORD`, alias `synchrogit`.
+Back up the signing key securely; replacing it breaks normal in-place updates.
+The workflow removes the temporary keystore after signing and verifies the APK.
+
+Android versionCode is derived from YY.M.PATCH as
+`YY * 1000000 + M * 10000 + PATCH * 100 + 99`; keep PATCH below 100 so the ordering
+remains monotonic. Prerelease sequencing requires an explicit versionCode policy
+before publishing multiple APK prereleases of the same base version.
+
+## Dependency notices
+
+Update THIRD_PARTY_LICENSES.html when changing Cargo.lock:
+
+```sh
+cargo install cargo-about --version 0.9.2 --locked --features cli
+python3 scripts/license-notices.py
+```
+
+The generated file accompanies the standalone archives, distribution packages
+and APK. The generator includes the upstream native-library license files as
+well as the Rust wrapper notices.

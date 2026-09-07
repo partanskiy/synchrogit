@@ -1,7 +1,7 @@
 use crate::mobile::{Engine, Request};
 use jni::{
     JNIEnv,
-    objects::{JClass, JString},
+    objects::{JByteArray, JClass, JObjectArray, JString},
     sys::jstring,
 };
 use serde_json::json;
@@ -60,18 +60,54 @@ pub extern "system" fn Java_dev_synchrogit_app_NativeBridge_call(
 pub extern "system" fn Java_dev_synchrogit_app_NativeBridge_configure(
     mut env: JNIEnv,
     _class: JClass,
-    ca_file: JString,
+    certificates: JObjectArray,
 ) {
     let result = CONFIGURED.get_or_init(|| {
-        let path: String = env.get_string(&ca_file).map_err(|e| e.to_string())?.into();
+        let count = env
+            .get_array_length(&certificates)
+            .map_err(|e| e.to_string())?;
+        if count == 0 {
+            return Err("Android trust store is empty".into());
+        }
         // SAFETY: configure is called before the first native request; call()
         // rejects requests until this OnceLock is complete. No libgit2 workers
         // can exist yet, and these global options are never changed afterward.
         unsafe {
-            git2::opts::set_ssl_cert_file(path).map_err(|e| e.to_string())?;
             git2::opts::set_server_connect_timeout_in_milliseconds(60_000)
                 .map_err(|e| e.to_string())?;
             git2::opts::set_server_timeout_in_milliseconds(60_000).map_err(|e| e.to_string())?;
+        }
+        // openssl-src builds Android with no-stdio; loading a PEM file through
+        // OpenSSL always fails. Parse the OS trust anchors from DER in memory.
+        for index in 0..count {
+            let array = JByteArray::from(
+                env.get_object_array_element(&certificates, index)
+                    .map_err(|e| e.to_string())?,
+            );
+            let der = env.convert_byte_array(&array).map_err(|e| e.to_string())?;
+            let length = der
+                .len()
+                .try_into()
+                .map_err(|_| "certificate is too large")?;
+            let mut pointer = der.as_ptr();
+            // SAFETY: DER remains alive during parsing. d2i_X509 creates an
+            // owned certificate. libgit2's store takes its own reference; free
+            // ours after adding it. Initialization is serialized above.
+            unsafe {
+                let cert = openssl_sys::d2i_X509(std::ptr::null_mut(), &mut pointer, length);
+                if cert.is_null() {
+                    return Err(format!("invalid Android trust anchor {index}"));
+                }
+                let result = libgit2_sys::git_libgit2_opts(
+                    libgit2_sys::GIT_OPT_ADD_SSL_X509_CERT as libc::c_int,
+                    cert,
+                );
+                openssl_sys::X509_free(cert);
+                if result < 0 {
+                    return Err(format!("cannot install Android trust anchor {index}"));
+                }
+            }
+            env.delete_local_ref(array).map_err(|e| e.to_string())?;
         }
         Ok(())
     });

@@ -6,7 +6,10 @@ arch=('x86_64' 'aarch64')
 url='@REPO_URL@'
 license=('MIT')
 depends=('git')
-makedepends=('cargo' 'lowdown')
+makedepends=('cargo' 'lowdown' 'perl')
+# Rust enables its own LTO. GCC LTO objects from vendored C libraries cannot
+# be linked by Rust's lld, so disable makepkg's additional cross-language LTO.
+options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::@SOURCE_URL@")
 sha256sums=('@SOURCE_SHA256@')
 
@@ -22,6 +25,7 @@ package() {
   install -Dm755 target/release/synchrogit "$pkgdir/usr/bin/synchrogit"
   install -Dm644 synchrogit.1 "$pkgdir/usr/share/man/man1/synchrogit.1"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 THIRD_PARTY_LICENSES.html "$pkgdir/usr/share/doc/$pkgname/THIRD_PARTY_LICENSES.html"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 packaging/systemd/synchrogit.service "$pkgdir/usr/lib/systemd/user/synchrogit.service"
   install -Dm644 packaging/systemd/synchrogit@.service "$pkgdir/usr/lib/systemd/system/synchrogit@.service"

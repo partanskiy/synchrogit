@@ -43,6 +43,8 @@ pub enum Request {
         path: PathBuf,
         name: String,
         email: String,
+        remote: Option<String>,
+        url: Option<String>,
     },
 }
 
@@ -64,7 +66,8 @@ impl Engine {
     pub fn call(&mut self, request: Request) -> Result<Value> {
         match request {
             Request::DecodeConfig { config } => {
-                parse_str(&config)?;
+                // Import may contain paths from another OS. Decode first so
+                // the user can edit them; saving and starting validate fully.
                 let value: toml::Value =
                     toml::from_str(&config).map_err(|e| SynchrogitError::Config(e.to_string()))?;
                 Ok(serde_json::to_value(value)?)
@@ -176,7 +179,13 @@ impl Engine {
                 embedded::clone_repository(&url, &path, &name, &email, Duration::from_secs(120))?;
                 Ok(json!({}))
             }
-            Request::Identity { path, name, email } => {
+            Request::Identity {
+                path,
+                name,
+                email,
+                remote,
+                url,
+            } => {
                 if self.supervisor.is_some() {
                     return Err(SynchrogitError::Other(
                         "stop synchronization before changing repository identity".into(),
@@ -192,6 +201,24 @@ impl Engine {
                     .set_str("user.name", &name)
                     .and_then(|()| config.set_str("user.email", &email))
                     .map_err(|e| SynchrogitError::Other(e.to_string()))?;
+                if let Some(url) = url.filter(|url| !url.is_empty()) {
+                    if !url.starts_with("https://") {
+                        return Err(SynchrogitError::Config(
+                            "Android connections require HTTPS".into(),
+                        ));
+                    }
+                    let remote = remote
+                        .filter(|name| !name.is_empty())
+                        .unwrap_or_else(|| "origin".into());
+                    match repo.find_remote(&remote) {
+                        Ok(_) => repo.remote_set_url(&remote, &url),
+                        Err(error) if error.code() == git2::ErrorCode::NotFound => {
+                            repo.remote(&remote, &url).map(|_| ())
+                        }
+                        Err(error) => Err(error),
+                    }
+                    .map_err(|e| SynchrogitError::Other(e.to_string()))?;
+                }
                 Ok(json!({}))
             }
         }
