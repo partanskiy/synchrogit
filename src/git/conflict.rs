@@ -31,21 +31,29 @@ pub async fn resolve_conflicts(git: &Git, template: &str, host: &str) -> Result<
             .map_err(|_| SynchrogitError::Other("non-utf8 conflict path".into()))?;
         let copy_rel = conflict_copy_path(f, host, &suffix);
 
-        // Extract the local-HEAD version as bytes. Some odd states (e.g.
-        // added-by-them / deleted-by-us) have no `:2:` entry; tolerate by
-        // skipping the copy but still resolving the conflict.
+        // A local deletion has no stage-2 entry to save. If the entry does
+        // exist, preserve it successfully before replacing or removing the
+        // original file; a read failure must not be treated as a deletion.
         let mut copy_written = false;
-        if let Ok(local_bytes) = capture_show(git, &format!(":2:{f}")).await {
+        let local_spec = format!(":2:{f}");
+        if git.rev_exists(&local_spec).await? {
+            let local_bytes = capture_show(git, &local_spec).await?;
             let copy_abs = git.repo.join(&copy_rel);
             if let Some(parent) = copy_abs.parent() {
-                let _ = fs::create_dir_all(parent).await;
+                fs::create_dir_all(parent).await?;
             }
             fs::write(&copy_abs, &local_bytes).await?;
             copy_written = true;
         }
 
-        git.run(["checkout", "--theirs", "--", f]).await?;
-        git.run(["add", "--", f]).await?;
+        if git.rev_exists(&format!(":3:{f}")).await? {
+            git.run(["checkout", "--theirs", "--", f]).await?;
+            git.run(["add", "--", f]).await?;
+        } else {
+            // A remote deletion has no "theirs" blob to check out. Honor
+            // the deletion after saving our version in the conflict copy.
+            git.run(["rm", "--", f]).await?;
+        }
         if copy_written {
             // best-effort: ignore if the copy isn't tracked (e.g. .gitignored)
             let _ = git.run(["add", "--", &copy_rel]).await;

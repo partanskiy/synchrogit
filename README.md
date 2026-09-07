@@ -14,7 +14,7 @@ A small daemon that keeps a set of git repositories in sync with their remotes. 
 Each configured repository gets an independent worker that runs the same cycle, triggered by filesystem events (debounced, so a burst of saves collapses into one commit) and by a periodic timer:
 
 1. **Commit** local changes with a timestamp message like `2026-07-22 17:41:03 (hostname)` (template configurable).
-2. **Fetch and merge** the remote. On a merge conflict nothing is ever lost: the remote version wins in place, and your version is saved alongside as `note.conflict-<host>-<timestamp>.md` — the marker sits before the extension, so the copy stays visible in extension-filtering tools like Obsidian.
+2. **Fetch and merge** the remote. On a merge conflict nothing is ever lost: the remote version wins in place, and your version is saved alongside as `note.conflict-<host>-<timestamp>.md` — the marker sits before the extension, so the copy stays visible in extension-filtering tools like Obsidian. If the remote deleted a file you edited locally, the original stays deleted and your edits survive in the conflict copy.
 3. **Push**, but only when the remote is actually behind — an in-sync cycle touches the network once (fetch) and reports an honest `no-op`.
 
 Around the cycle:
