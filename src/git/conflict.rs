@@ -1,18 +1,13 @@
-use std::process::Stdio;
-
 use tokio::fs;
-use tokio::process::Command;
-use tokio::time::timeout;
 use tracing::info;
 
 use super::cmd::Git;
+use super::operation::Operation;
 use crate::clock::{conflict_suffix, now_local, render_commit_message};
 use crate::error::{Result, SynchrogitError};
 
 pub async fn resolve_conflicts(git: &Git, template: &str, host: &str) -> Result<Vec<String>> {
-    let out = git
-        .run(["diff", "--name-only", "--diff-filter=U", "-z"])
-        .await?;
+    let out = git.execute(Operation::Conflicts).await?;
 
     let files: Vec<&[u8]> = out
         .stdout
@@ -37,7 +32,10 @@ pub async fn resolve_conflicts(git: &Git, template: &str, host: &str) -> Result<
         let mut copy_written = false;
         let local_spec = format!(":2:{f}");
         if git.rev_exists(&local_spec).await? {
-            let local_bytes = capture_show(git, &local_spec).await?;
+            let local_bytes = git
+                .execute(Operation::Blob(local_spec.clone()))
+                .await?
+                .stdout;
             let copy_abs = git.repo.join(&copy_rel);
             if let Some(parent) = copy_abs.parent() {
                 fs::create_dir_all(parent).await?;
@@ -46,17 +44,10 @@ pub async fn resolve_conflicts(git: &Git, template: &str, host: &str) -> Result<
             copy_written = true;
         }
 
-        if git.rev_exists(&format!(":3:{f}")).await? {
-            git.run(["checkout", "--theirs", "--", f]).await?;
-            git.run(["add", "--", f]).await?;
-        } else {
-            // A remote deletion has no "theirs" blob to check out. Honor
-            // the deletion after saving our version in the conflict copy.
-            git.run(["rm", "--", f]).await?;
-        }
+        git.execute(Operation::KeepRemote(f.into())).await?;
         if copy_written {
             // best-effort: ignore if the copy isn't tracked (e.g. .gitignored)
-            let _ = git.run(["add", "--", &copy_rel]).await;
+            let _ = git.execute(Operation::Stage(copy_rel.clone())).await;
             saved.push(copy_rel);
         }
     }
@@ -65,7 +56,7 @@ pub async fn resolve_conflicts(git: &Git, template: &str, host: &str) -> Result<
         "{} [merge: kept remote, saved local copies]",
         render_commit_message(template, now_local(), host)
     );
-    git.run(["commit", "--no-edit", "-m", &msg]).await?;
+    git.execute(Operation::Commit(msg)).await?;
 
     info!(files = saved.len(), "conflict resolved");
     Ok(saved)
@@ -81,31 +72,6 @@ fn conflict_copy_path(f: &str, host: &str, suffix: &str) -> String {
             format!("{stem}.conflict-{host}-{suffix}.{ext}")
         }
         None => format!("{f}.conflict-{host}-{suffix}"),
-    }
-}
-
-async fn capture_show(git: &Git, spec: &str) -> Result<Vec<u8>> {
-    let mut cmd = Command::new("git");
-    cmd.arg("-C")
-        .arg(&git.repo)
-        .args(["show", spec])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    cmd.kill_on_drop(true);
-    let out = timeout(git.timeout(), cmd.output())
-        .await
-        .map_err(|_| SynchrogitError::GitTimeout {
-            args: vec!["show".to_string(), spec.to_string()],
-            timeout: git.timeout(),
-        })?
-        .map_err(SynchrogitError::GitSpawn)?;
-    if out.status.success() {
-        Ok(out.stdout)
-    } else {
-        Err(SynchrogitError::Other(
-            String::from_utf8_lossy(&out.stderr).into_owned(),
-        ))
     }
 }
 

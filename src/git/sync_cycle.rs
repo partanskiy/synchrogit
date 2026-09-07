@@ -2,6 +2,7 @@ use tracing::{info, warn};
 
 use super::cmd::Git;
 use super::conflict::resolve_conflicts;
+use super::operation::Operation;
 use crate::clock::{DEFAULT_COMMIT_TEMPLATE, now_local, render_commit_message};
 use crate::error::{Result, SynchrogitError};
 use crate::state::CycleReport;
@@ -134,7 +135,7 @@ async fn commit_local(git: &Git, template: &str, host: &str, ignore: &[String]) 
     }
     git.add_all_with_ignore(ignore).await?;
     let msg = render_commit_message(template, now_local(), host);
-    match git.run(["commit", "-m", &msg]).await {
+    match git.execute(Operation::Commit(msg.clone())).await {
         Ok(_) => {
             info!(message = %msg, "committed");
             Ok(true)
@@ -158,10 +159,8 @@ async fn pull_step(
             .as_deref()
             .ok_or_else(|| SynchrogitError::Other("remote target requires a branch".into()))?;
         let ref_name = format!("{remote}/{branch}");
-        if let Err(SynchrogitError::GitFailed { stderr, .. }) =
-            git.run(["fetch", "--quiet", remote]).await
-        {
-            let trimmed = stderr.trim().to_string();
+        if let Err(error) = git.execute(Operation::Fetch(Some(remote.clone()))).await {
+            let trimmed = error.to_string();
             warn!(stderr = %trimmed, "fetch failed (offline?)");
             return Ok((false, false, Some(trimmed)));
         }
@@ -173,9 +172,8 @@ async fn pull_step(
         if !git.has_upstream().await? {
             return Ok((false, false, None));
         }
-        if let Err(SynchrogitError::GitFailed { stderr, .. }) = git.run(["fetch", "--quiet"]).await
-        {
-            let trimmed = stderr.trim().to_string();
+        if let Err(error) = git.execute(Operation::Fetch(None)).await {
+            let trimmed = error.to_string();
             warn!(stderr = %trimmed, "fetch failed (offline?)");
             return Ok((false, false, Some(trimmed)));
         }
@@ -188,8 +186,7 @@ async fn pull_step(
         return Ok((false, false, None));
     }
 
-    let merge_args = ["merge", "--no-edit", "--quiet", remote_ref.as_str()];
-    match git.run(merge_args).await {
+    match git.execute(Operation::Merge(remote_ref)).await {
         Ok(_) => {
             info!("pulled");
             Ok((true, false, None))
@@ -200,7 +197,7 @@ async fn pull_step(
                 resolve_conflicts(git, template, host).await?;
                 Ok((true, true, None))
             } else {
-                let _ = git.run(["merge", "--abort"]).await;
+                let _ = git.execute(Operation::AbortMerge).await;
                 Err(SynchrogitError::Other(
                     "merge failed without producing a merge state".into(),
                 ))
@@ -220,8 +217,7 @@ async fn push_step(git: &Git, target: &SyncTarget) -> std::result::Result<bool, 
         if tracking_matches_head(git, &tracking_ref).await {
             return Ok(false);
         }
-        let refspec = format!("HEAD:{branch}");
-        return run_push(git, ["push", "--quiet", remote.as_str(), refspec.as_str()]).await;
+        return run_push(git, Some(remote.clone()), Some(branch.into())).await;
     }
 
     match git.has_upstream().await {
@@ -232,7 +228,7 @@ async fn push_step(git: &Git, target: &SyncTarget) -> std::result::Result<bool, 
     if tracking_matches_head(git, "@{u}").await {
         return Ok(false);
     }
-    run_push(git, ["push", "--quiet"]).await
+    run_push(git, None, None).await
 }
 
 // The tracking ref only moves on fetch or push, so matching HEAD means the
@@ -247,12 +243,12 @@ async fn tracking_matches_head(git: &Git, tracking_ref: &str) -> bool {
     }
 }
 
-async fn run_push<I, S>(git: &Git, args: I) -> std::result::Result<bool, String>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<std::ffi::OsStr>,
-{
-    match git.run(args).await {
+async fn run_push(
+    git: &Git,
+    remote: Option<String>,
+    branch: Option<String>,
+) -> std::result::Result<bool, String> {
+    match git.execute(Operation::Push { remote, branch }).await {
         Ok(_) => {
             info!("pushed");
             Ok(true)

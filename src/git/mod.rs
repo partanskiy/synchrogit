@@ -5,3 +5,7 @@ pub mod sync_cycle;
 
 pub use cmd::{Git, GitOutput};
 pub use sync_cycle::{CycleParams, sync_cycle};
+
+#[cfg(feature = "embedded-git")]
+pub mod embedded;
+mod operation;

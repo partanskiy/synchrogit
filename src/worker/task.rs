@@ -78,6 +78,7 @@ async fn run(
 
     info!(
         path = %cfg.path.display(),
+        git = %git.backend_name()?,
         interval = ?cfg.interval,
         debounce = ?cfg.debounce,
         "worker started"

@@ -39,7 +39,11 @@ path = "{}"
 
     let supervisor = Supervisor::spawn_loaded(load_from_path(&config_path).unwrap()).unwrap();
     let cancel = CancellationToken::new();
+    #[cfg(unix)]
     let socket = tmp.path().join("synchrogit.sock");
+    #[cfg(windows)]
+    let socket =
+        std::path::PathBuf::from(format!(r"\\.\pipe\synchrogit-test-{}", std::process::id()));
     let ipc = server::spawn(socket.clone(), supervisor.control(), cancel.clone())
         .await
         .unwrap();

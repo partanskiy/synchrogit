@@ -26,7 +26,7 @@
             src = self;
             cargoLock.lockFile = ./Cargo.lock;
 
-            nativeBuildInputs = [ pkgs.lowdown ];
+            nativeBuildInputs = [ pkgs.lowdown pkgs.perl pkgs.pkg-config ];
             nativeCheckInputs = [ pkgs.gitMinimal ];
 
             postBuild = ''
