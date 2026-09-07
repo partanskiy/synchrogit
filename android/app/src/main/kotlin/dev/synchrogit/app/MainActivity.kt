@@ -199,7 +199,7 @@ class MainActivity : ComponentActivity() {
                 Text(repo.optString("name", "Repository"), style = MaterialTheme.typography.titleLarge)
                 Field("Name", repo.optString("name"), enabled) { change("name", it) }
                 Field("Folder path", path, enabled) { change("path", it) }
-                TextButton(enabled = enabled, onClick = { change("path", File(filesDir, "repositories/${repo.optString("name", "notes")}").absolutePath) }) { Text("Use an app-private folder") }
+                TextButton(enabled = enabled, onClick = { change("path", File(filesDir, "repositories/${repo.optString("name", "notes")}").canonicalPath) }) { Text("Use an app-private folder") }
                 Field("Branch (blank: current branch)", repo.optString("branch"), enabled) { change("branch", it) }
                 Field("Remote (blank: configured upstream)", repo.optString("remote"), enabled) { change("remote", it) }
                 var advanced by remember { mutableStateOf(false) }

@@ -1,6 +1,8 @@
 package dev.synchrogit.app
 
 import android.content.Intent
+import android.os.Build
+import android.os.Environment
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -18,7 +20,18 @@ class NativeSyncTest {
     private fun call(op: String, fields: JSONObject = JSONObject()) = NativeBridge.request(op, fields)
 
     @Test fun nativeSyncPreservesEditsConflictsAndRemoteDeletions() {
-        val root = File(context.cacheDir, "sync-test-${System.nanoTime()}").apply { mkdirs() }
+        syncFixture(File(context.cacheDir, "sync-test-${System.nanoTime()}"))
+    }
+
+    @Test fun sharedFolderSupportsSyncAndFileWatching() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            assertTrue("Grant all-files access before running the shared-folder test", Environment.isExternalStorageManager())
+        }
+        syncFixture(File(Environment.getExternalStorageDirectory(), "synchrogit-test-${System.nanoTime()}"))
+    }
+
+    private fun syncFixture(root: File) {
+        assertTrue(root.mkdirs())
         val store = SettingsStore(context)
         val originalConfig = store.configFile.takeIf { it.exists() }?.readBytes()
         try {

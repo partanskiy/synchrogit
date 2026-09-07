@@ -43,6 +43,7 @@ synchrogit
 synchrogit.1
 README.md
 LICENSE
+THIRD_PARTY_LICENSES.html
 synchrogit.service
 synchrogit@.service
 config.example.toml
