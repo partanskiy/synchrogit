@@ -28,5 +28,5 @@ with tempfile.TemporaryDirectory() as directory:
     target.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(work.rglob("*")):
-            if path.is_file():
-                archive.write(path, path.relative_to(work))
+            # libgit2's local transport needs empty objects/pack directories.
+            archive.write(path, path.relative_to(work))
