@@ -18,6 +18,7 @@ package() {
   install -Dm755 "$srcdir/$_pkgname" "$pkgdir/usr/bin/$_pkgname"
   install -Dm644 "$srcdir/$_pkgname.1" "$pkgdir/usr/share/man/man1/$_pkgname.1"
   install -Dm644 "$srcdir/README.md" "$pkgdir/usr/share/doc/$_pkgname/README.md"
+  install -Dm644 "$srcdir/THIRD_PARTY_LICENSES.html" "$pkgdir/usr/share/doc/$_pkgname/THIRD_PARTY_LICENSES.html"
   install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$_pkgname/LICENSE"
   install -Dm644 "$srcdir/synchrogit.service" "$pkgdir/usr/lib/systemd/user/synchrogit.service"
   install -Dm644 "$srcdir/synchrogit@.service" "$pkgdir/usr/lib/systemd/system/synchrogit@.service"

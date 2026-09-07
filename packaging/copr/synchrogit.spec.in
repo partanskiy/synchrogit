@@ -6,6 +6,9 @@ License:        MIT
 URL:            https://github.com/partanskiy/synchrogit
 Source0:        %{url}/archive/refs/tags/v%{version}.tar.gz
 
+BuildRequires:  gcc
+BuildRequires:  make
+BuildRequires:  perl-core
 BuildRequires:  cargo
 BuildRequires:  rust
 BuildRequires:  lowdown
@@ -33,7 +36,7 @@ install -Dm644 packaging/config.example.toml %{buildroot}%{_docdir}/synchrogit/c
 
 %files
 %license LICENSE
-%doc README.md
+%doc README.md THIRD_PARTY_LICENSES.html
 %{_bindir}/synchrogit
 %{_mandir}/man1/synchrogit.1*
 %{_userunitdir}/synchrogit.service

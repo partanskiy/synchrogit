@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
         var busy by remember { mutableStateOf(false) }
         var running by remember { mutableStateOf(false) }
         var status by remember { mutableStateOf(JSONObject()) }
+        var showLicenses by remember { mutableStateOf(false) }
         var periodic by remember { mutableStateOf(store.periodic) }
         val scope = rememberCoroutineScope()
         fun perform(action: suspend () -> Unit) {
@@ -80,6 +81,16 @@ class MainActivity : ComponentActivity() {
                 val current = withContext(NativeBridge.dispatcher) { NativeBridge.request("status") }
                 status = current; running = current.optBoolean("running"); message = store.message
                 delay(1000)
+            }
+        }
+        if (showLicenses) androidx.compose.ui.window.Dialog(onDismissRequest = { showLicenses = false }) {
+            Surface(shape = MaterialTheme.shapes.large) {
+                Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {
+                    androidx.compose.ui.viewinterop.AndroidView(modifier = Modifier.weight(1f), factory = { context ->
+                        android.webkit.WebView(context).apply { loadUrl("file:///android_asset/THIRD_PARTY_LICENSES.html") }
+                    })
+                    TextButton(onClick = { showLicenses = false }) { Text("Close") }
+                }
             }
         }
         val repos = settings.optJSONArray("repo") ?: JSONArray()
@@ -118,7 +129,8 @@ class MainActivity : ComponentActivity() {
                 Text("For shared folders such as Obsidian vaults, grant file access and enter an absolute folder path below. App-private folders need no additional access.", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = {
                     if (Build.VERSION.SDK_INT >= 30) {
-                        startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
+                        try { startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName"))) }
+                        catch (_: android.content.ActivityNotFoundException) { startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
                     } else storage.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE))
                 }) { Text("Grant folder access") }
             }
@@ -171,6 +183,7 @@ class MainActivity : ComponentActivity() {
                     TextButton(enabled = !busy && !running && !periodic, onClick = { importLauncher.launch(arrayOf("*/*")) }) { Text("Import TOML") }
                     TextButton(enabled = !busy, onClick = { export.launch("config.toml") }) { Text("Export TOML") }
                 }
+                TextButton(onClick = { showLicenses = true }) { Text("Open-source licenses") }
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -222,7 +235,7 @@ class MainActivity : ComponentActivity() {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(enabled = enabled && path.isNotBlank(), onClick = { perform {
                         prepare()
-                        NativeBridge.request("identity", JSONObject().put("path", path).put("name", auth.optString("name")).put("email", auth.optString("email")))
+                        NativeBridge.request("identity", JSONObject().put("path", path).put("name", auth.optString("name")).put("email", auth.optString("email")).put("remote", repo.optString("remote", "origin")).put("url", auth.optString("url")))
                         store.message = "Connection and author saved"
                     } }) { Text("Use existing") }
                     Button(enabled = enabled && path.isNotBlank(), onClick = { perform {

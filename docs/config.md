@@ -1,10 +1,12 @@
 # Configuration
 
-`synchrogit run` reads the first existing config file from:
+On Linux and macOS, `synchrogit run` reads the first existing config file from:
 
 1. `$XDG_CONFIG_HOME/synchrogit/config.toml`
 2. `~/.config/synchrogit/config.toml`
 3. `/etc/synchrogit/config.toml`
+
+Windows checks `%APPDATA%\synchrogit\config.toml`, then `%LOCALAPPDATA%`, then `%USERPROFILE%\.config\synchrogit\config.toml`. Android uses the same schema in its settings UI.
 
 Use `synchrogit run --config /path/to/config.toml` to select a specific file.
 
@@ -27,13 +29,13 @@ auto-push = true
 - `debounce`: filesystem event quiet period before a sync cycle starts.
 - `backoff-min`: first timer delay after a failed cycle.
 - `backoff-max`: maximum timer delay after repeated failures.
-- `git-timeout`: timeout applied to each spawned `git` command.
+- `git-timeout`: timeout applied to each spawned `git` command; embedded network deadlines are cooperative (see [platforms](platforms.md)).
 - `commit-template`: local auto-commit message. Supported placeholders are `{ts}` and `{host}`.
 - `conflict-policy`: currently only `keep-remote`.
 - `auto-pull`: fetch and merge remote changes when possible.
 - `auto-push`: push local commits when possible.
 
-`backoff-min` and `git-timeout` must be greater than zero. `backoff-max` must be greater than or equal to `backoff-min`.
+`interval`, `backoff-min` and `git-timeout` must be greater than zero. `backoff-max` must be greater than or equal to `backoff-min`.
 
 ## Repositories
 

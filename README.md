@@ -9,19 +9,21 @@
 
 A small daemon that keeps a set of git repositories in sync with their remotes. Point it at a repo shared between machines — an Obsidian vault, a notes folder, a wiki — and stop thinking about commits, pulls, and pushes: every machine stays a plain git clone, and the full history stays yours.
 
+Works on **Linux, macOS and Windows**, with a **Kotlin + Compose Android app** for configuration and synchronization. The synchronization engine is shared Rust code.
+
 ## How it works
 
 Each configured repository gets an independent worker that runs the same cycle, triggered by filesystem events (debounced, so a burst of saves collapses into one commit) and by a periodic timer:
 
 1. **Commit** local changes with a timestamp message like `2026-07-22 17:41:03 (hostname)` (template configurable).
-2. **Fetch and merge** the remote. On a merge conflict nothing is ever lost: the remote version wins in place, and your version is saved alongside as `note.conflict-<host>-<timestamp>.md` — the marker sits before the extension, so the copy stays visible in extension-filtering tools like Obsidian. If the remote deleted a file you edited locally, the original stays deleted and your edits survive in the conflict copy.
+2. **Fetch and merge** the remote. On a merge conflict: the remote version wins in place, and your version is saved alongside as `note.conflict-<host>-<timestamp>.md` — the marker sits before the extension, so the copy stays visible in extension-filtering tools like Obsidian. If the remote deleted a file you edited locally, the original stays deleted and your edits survive in the conflict copy.
 3. **Push**, but only when the remote is actually behind — an in-sync cycle touches the network once (fetch) and reports an honest `no-op`.
 
 Around the cycle:
 
-- **Offline-first.** Commits keep landing locally without a network; failed cycles back off exponentially, and the first successful cycle reconciles everything. Killing or rebooting the machine is always safe — the daemon is stateless, all state *is* the git repositories.
-- **Live control.** A Unix socket serves `status`, `sync`, and `reload`; the config hot-reloads on edit or atomic replace, restarting only the workers whose settings actually changed.
-- **Plain git underneath.** Operations shell out to your `git` binary, so SSH config, agents, and credential helpers work exactly as they do in your terminal.
+- **Offline-first.** Commits keep landing locally without a network; failed cycles back off exponentially, and the first successful cycle reconciles everything. Committed history remains in the repository across restarts.
+- **Live control.** A local Unix socket or Windows named pipe serves `status`, `sync`, and `reload`; the config hot-reloads on edit or atomic replace, restarting only the workers whose settings actually changed.
+- **Plain git underneath.** System Git is preferred, preserving its SSH configuration, agents, credential helpers and hooks. When Git is unavailable, the built-in libgit2 backend handles synchronization. Run `synchrogit backend` to see the selection; [backend details](docs/platforms.md) explain the differences.
 
 ## Installation
 
@@ -54,6 +56,26 @@ brew install partanskiy/tap/synchrogit
 brew services start synchrogit
 ```
 
+### Windows
+
+Download and extract the Windows ZIP from [Releases](https://github.com/partanskiy/synchrogit/releases/latest).
+Copy its example config to `%APPDATA%\synchrogit\config.toml`, edit the repository
+path, then run `synchrogit.exe run`. `Install-Startup.ps1` enables startup at login;
+`Install-MinGit.ps1` optionally installs MinGit. Embedded Git is already included.
+
+### Android
+
+Install `synchrogit-android.apk` from [Releases](https://github.com/partanskiy/synchrogit/releases/latest),
+or add this GitHub repository to Obtainium. Configure repositories in the app,
+choose **Clone** or **Use existing**, save settings, then start synchronization.
+The same signing key and APK name are retained across releases for updates.
+
+Continuous sync watches local edits and checks remotes on the timer, using a
+visible notification. Android can suspend background execution and, on Android
+15+, limits background dataSync services to six hours per day. Optional scheduled
+checks run every 15 minutes or later. See the [Android guide](android/README.md)
+for folder access, credentials, background behavior and building the app.
+
 ### Debian / Ubuntu
 
 Add the signed APT repo once, then install and upgrade through `apt` as usual. The binaries are fully static, so the same packages work on any Debian or Ubuntu release:
@@ -82,7 +104,7 @@ nix profile install github:partanskiy/synchrogit
 
 ### Everything else
 
-Standalone `.deb` and `.rpm` packages and plain binary tarballs are attached to every [GitHub Release](https://github.com/partanskiy/synchrogit/releases). Linux builds are static musl binaries with no runtime dependencies beyond a `git` on `PATH`, so they run on any distro. Every asset has a checksum, plus an aggregate `SHA256SUMS`.
+Standalone `.deb` and `.rpm` packages and plain binary tarballs are attached to every [GitHub Release](https://github.com/partanskiy/synchrogit/releases). Linux builds are static musl binaries with an embedded Git fallback. musl targets Linux; macOS, Windows and Android use their own native targets. Every asset has a checksum, plus an aggregate `SHA256SUMS`.
 
 ## Quick start
 
@@ -118,11 +140,13 @@ A user service starts at login. To run at boot on headless machines (lingering) 
 
 ## Configuration
 
-`synchrogit run` reads the first existing file from:
+On Linux/macOS, `synchrogit run` reads the first existing file from:
 
 1. `$XDG_CONFIG_HOME/synchrogit/config.toml`
 2. `~/.config/synchrogit/config.toml`
 3. `/etc/synchrogit/config.toml`
+
+Windows uses `%APPDATA%\synchrogit\config.toml` first; Android edits an app-private config through its UI.
 
 The lookup is first-match, not a merge: a user config completely shadows the machine-wide one. Use `--config` to point at an explicit path.
 
@@ -147,7 +171,7 @@ ignore = [".direnv/**"]     # pathspec excludes; matches do not trigger commits
 [[repo]]
 name = "agent-wiki"
 path = "~/.local/share/agent-wiki"
-interval = "30s"            # every [defaults] key can be overridden per repo
+interval = "30s"            # per-repo override of the timer interval
 ```
 
 Repo names must be unique. Paths may use `~` and environment variables, but must be absolute after expansion. Commit templates can use `{ts}` and `{host}`. Editing the config while the daemon runs is fine — it reloads automatically and keeps the previous config when the new one fails to parse.
@@ -157,13 +181,14 @@ See [`docs/config.md`](docs/config.md) for the full reference and [`examples/con
 ## CLI
 
 ```sh
+synchrogit backend   # report system/bundled Git or embedded libgit2
 synchrogit run       # start the daemon in the foreground
 synchrogit status    # one tab-separated line per repo
 synchrogit sync      # queue an immediate cycle for all repos (or one: sync <name>)
 synchrogit reload    # re-read the config now
 ```
 
-Control commands find the daemon automatically: they probe `$XDG_RUNTIME_DIR/synchrogit.sock`, the system-template socket under `/run/synchrogit/<user>/`, and the `/tmp` fallback, in that order. Override with `--socket` or `SYNCHROGIT_SOCKET`.
+On Windows, control commands use a user-specific named pipe. On Unix, they find the daemon automatically: they probe `$XDG_RUNTIME_DIR/synchrogit.sock`, the system-template socket under `/run/synchrogit/<user>/`, and the `/tmp` fallback, in that order. Override with `--socket` or `SYNCHROGIT_SOCKET`.
 
 ## Versioning
 
@@ -175,7 +200,7 @@ Versions follow a niri-style calendar scheme — `YY.M.PATCH`, e.g. `26.7.5` —
 cargo build --locked --release
 ```
 
-Requires Rust 1.94+ (edition 2024) and a `git` on `PATH`. Linux and macOS are supported.
+Requires Rust 1.94+ (edition 2024), a C compiler, make and Perl for vendored libraries. Tests require Git. Linux, macOS and Windows use this build; [Android builds](android/README.md#build-and-test) also need JDK, SDK and NDK. `--no-default-features` produces a smaller build requiring external Git.
 
 ## Packaging
 
@@ -193,7 +218,7 @@ See [`RELEASING.md`](RELEASING.md) for the release flow.
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE). Distributed binaries also include [third-party license notices](THIRD_PARTY_LICENSES.html).
 
 ## Contributing
 

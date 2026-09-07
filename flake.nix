@@ -34,6 +34,7 @@
             '';
 
             postInstall = ''
+              install -Dm644 THIRD_PARTY_LICENSES.html $out/share/doc/synchrogit/THIRD_PARTY_LICENSES.html
               install -Dm644 synchrogit.1 $out/share/man/man1/synchrogit.1
               install -Dm644 packaging/config.example.toml $out/share/doc/synchrogit/config.example.toml
             ''

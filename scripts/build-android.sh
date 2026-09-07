@@ -11,6 +11,8 @@ esac
 bin="$ndk/toolchains/llvm/prebuilt/$host/bin"
 export PATH="$bin:$PATH"
 export ANDROID_NDK_HOME="$ndk"
+mkdir -p android/app/src/main/assets
+cp THIRD_PARTY_LICENSES.html android/app/src/main/assets/
 for abi in ${ANDROID_ABIS:-arm64-v8a x86_64}; do
   case "$abi" in
     arm64-v8a) target=aarch64-linux-android ;;
