@@ -40,6 +40,11 @@ impl Config {
                 "at least one [[repo]] entry is required".into(),
             ));
         }
+        if self.defaults.interval.is_zero() {
+            return Err(SynchrogitError::Config(
+                "defaults.interval must be greater than zero".into(),
+            ));
+        }
         if self.defaults.backoff_min.is_zero() {
             return Err(SynchrogitError::Config(
                 "defaults.backoff-min must be greater than zero".into(),
@@ -58,6 +63,12 @@ impl Config {
 
         let mut names = HashSet::new();
         for repo in &self.repos {
+            if repo.interval.is_some_and(|interval| interval.is_zero()) {
+                return Err(SynchrogitError::Config(format!(
+                    "repo `{}` interval must be greater than zero",
+                    repo.name
+                )));
+            }
             if repo.name.trim().is_empty() {
                 return Err(SynchrogitError::Config(
                     "repo names must not be empty".into(),

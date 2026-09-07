@@ -36,6 +36,8 @@ pub fn clone(remote: &Path, target: &Path) {
     let output = Command::new("git")
         .args([
             "clone",
+            "-c",
+            "core.autocrlf=false",
             "-q",
             "-b",
             "main",
@@ -52,6 +54,8 @@ pub fn clone(remote: &Path, target: &Path) {
         let _ = Command::new("git")
             .args([
                 "clone",
+                "-c",
+                "core.autocrlf=false",
                 "-q",
                 remote.to_str().unwrap(),
                 target.to_str().unwrap(),
