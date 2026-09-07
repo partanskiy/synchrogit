@@ -50,7 +50,10 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: android/gradlew -p android connectedDebugAndroidTest --console=plain
+          script: |
+            android/gradlew -p android installDebug --console=plain
+            adb shell appops set --uid dev.synchrogit.app.debug MANAGE_EXTERNAL_STORAGE allow
+            android/gradlew -p android connectedDebugAndroidTest --console=plain
       - uses: actions/upload-artifact@v4
         if: always()
         with:

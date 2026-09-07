@@ -19,6 +19,10 @@ To use Git-specific hooks, SSH configuration or credential-manager integrations,
 install Git for Windows or use MinGit.
 
 Install-Startup.ps1 registers a task for your next user login. Run it after
-reviewing the script and your configuration. Remove-Startup.ps1 removes that
+reviewing the script and your configuration:
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Startup.ps1
+The task permits its bundled launcher script in that PowerShell process only;
+it does not change your account or machine execution policy.
+Remove-Startup.ps1 removes that
 user's startup task; repository files are never removed. Stop any already
 running daemon before starting another copy.

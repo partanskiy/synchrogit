@@ -48,14 +48,19 @@ rustup target add aarch64-linux-android x86_64-linux-android
 scripts/build-android.sh
 python3 scripts/android-test-fixture.py
 android/gradlew -p android assembleDebug assembleDebugAndroidTest lintDebug
+android/gradlew -p android installDebug
+adb shell appops set --uid dev.synchrogit.app.debug MANAGE_EXTERNAL_STORAGE allow
 android/gradlew -p android connectedDebugAndroidTest
 ```
 
 The fixture contains only disposable local test repositories. Instrumentation
 covers the Kotlin/JNI/Rust boundary, actual Git commit/fetch/merge/push, binary
-files, conflict copies, remote deletions, filesystem watching, Android Keystore,
+files, conflict copies, remote deletions, filesystem watching in private and
+shared storage, foreground-service start/stop, Android Keystore,
 HTTPS certificate validation through a public clone, and loading the Compose UI.
 GitHub Actions builds the APK and runs these checks on an Android emulator.
+The all-files test permission above applies to Android 11+; on Android 8–10,
+grant the debug app's storage permission instead.
 
 Release builds use ANDROID_KEYSTORE_PATH and ANDROID_KEYSTORE_PASSWORD (alias
 synchrogit). All release APKs must use the same key for in-place updates through
