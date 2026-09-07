@@ -28,6 +28,7 @@ class NativeSyncTest {
                     val entry = zip.nextEntry ?: break
                     val file = File(root, entry.name)
                     require(file.canonicalPath.startsWith(root.canonicalPath + "/"))
+                    if (entry.isDirectory) { file.mkdirs(); continue }
                     file.parentFile!!.mkdirs()
                     file.outputStream().use { zip.copyTo(it) }
                 }
