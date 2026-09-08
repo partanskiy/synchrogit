@@ -1,5 +1,8 @@
 SynchroGit for Windows (x86_64)
 
+Requires Windows 10 or later. The C runtime is linked into the executable;
+installing the Visual C++ Redistributable separately is not required.
+
 Extract the archive into a permanent folder. Copy config.example.toml to
 %APPDATA%\synchrogit\config.toml and replace the example repository path.
 

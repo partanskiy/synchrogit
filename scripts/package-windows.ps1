@@ -5,6 +5,18 @@ param(
     [string]$Output = 'dist'
 )
 $ErrorActionPreference = 'Stop'
+# Inspect the actual executable: a CI image can hide a missing VC++ runtime.
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+$vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+if (!$vs) { throw 'MSVC tools are required to verify the portable Windows archive.' }
+$dumpbin = Get-ChildItem (Join-Path $vs 'VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe') |
+    Sort-Object FullName -Descending | Select-Object -First 1
+if (!$dumpbin) { throw 'Cannot locate dumpbin to verify runtime dependencies.' }
+$dependencies = & $dumpbin.FullName /dependents $Binary
+if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect Windows executable dependencies.' }
+if ($dependencies -match '(?i)\b(?:vcruntime|msvcp|concrt)[\w.-]*\.dll\b') {
+    throw 'The portable executable must not require a separately installed VC++ runtime.'
+}
 $staging = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory $staging | Out-Null
 try {
