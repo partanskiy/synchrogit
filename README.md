@@ -69,6 +69,9 @@ Install `synchrogit-android.apk` from [Releases](https://github.com/partanskiy/s
 or add this GitHub repository to Obtainium. Configure repositories in the app,
 choose **Clone** or **Use existing**, save settings, then start synchronization.
 The same signing key and APK name are retained across releases for updates.
+The UI follows the system theme and colors. **Git defaults** shares a commit
+author and SSH key across repositories; GitHub and GitLab.com server keys are
+verified automatically.
 
 Continuous sync watches local edits and checks remotes on the timer, using a
 visible notification. Android can suspend background execution and, on Android

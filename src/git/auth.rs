@@ -78,6 +78,16 @@ const GITHUB_FINGERPRINTS: [&str; 3] = [
     "SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU",
 ];
 
+// Verified against both GitLab's documentation and its live instance
+// configuration, 2026-09-08. These pins do not apply to self-managed GitLab.
+// https://docs.gitlab.com/user/gitlab_com/#ssh-host-keys-fingerprints
+// https://gitlab.com/help/instance_configuration
+const GITLAB_FINGERPRINTS: [&str; 3] = [
+    "SHA256:HbW3g8zUjNSksFbqTiUWPWg2Bq1x8xdGUrliXFzSnUw",
+    "SHA256:eUXGGm1YGsMAS7vkcx6JOJdOGHPem5gQp4taiCfCLB8",
+    "SHA256:ROQFvPThGrW4RuWLoL9tq9I9zJ42fK4XywyRtbOz/EQ",
+];
+
 fn fingerprint(value: &str) -> Result<[u8; 32], Error> {
     value.strip_prefix("SHA256:").and_then(|s| STANDARD_NO_PAD.decode(s).ok())
         .and_then(|bytes| bytes.try_into().ok())
@@ -107,6 +117,13 @@ impl Authentication {
         } else if (host == "github.com" && port == 22) || (host == "ssh.github.com" && port == 443)
         {
             GITHUB_FINGERPRINTS
+                .iter()
+                .map(|s| fingerprint(s))
+                .collect::<Result<_, _>>()?
+        } else if (host == "gitlab.com" && port == 22)
+            || (host == "altssh.gitlab.com" && port == 443)
+        {
+            GITLAB_FINGERPRINTS
                 .iter()
                 .map(|s| fingerprint(s))
                 .collect::<Result<_, _>>()?
@@ -227,5 +244,41 @@ mod tests {
         )
         .unwrap();
         assert!(custom.check_host("another.example", &good).is_ok());
+    }
+
+    #[test]
+    fn gitlab_pins_are_scoped_to_official_hosts_and_ports() {
+        let key = generate_ssh_key().unwrap();
+        let private = key["private_key"].as_str().unwrap();
+        for (url, host) in [
+            ("git@gitlab.com:group/repo.git", "gitlab.com"),
+            (
+                "ssh://git@altssh.gitlab.com:443/group/repo.git",
+                "altssh.gitlab.com",
+            ),
+        ] {
+            let auth = Authentication::ssh(url, private.into(), "").unwrap();
+            for pin in GITLAB_FINGERPRINTS {
+                assert!(auth.check_host(host, &fingerprint(pin).unwrap()).is_ok());
+            }
+            assert!(
+                auth.check_host(host, &fingerprint(GITHUB_FINGERPRINTS[2]).unwrap())
+                    .is_err()
+            );
+            assert!(
+                auth.check_host(
+                    "gitlab.example.com",
+                    &fingerprint(GITLAB_FINGERPRINTS[1]).unwrap()
+                )
+                .is_err()
+            );
+        }
+        for url in [
+            "git@gitlab.example.com:group/repo.git",
+            "ssh://git@gitlab.com:2222/group/repo.git",
+            "git@altssh.gitlab.com:group/repo.git",
+        ] {
+            assert!(Authentication::ssh(url, private.into(), "").is_err());
+        }
     }
 }

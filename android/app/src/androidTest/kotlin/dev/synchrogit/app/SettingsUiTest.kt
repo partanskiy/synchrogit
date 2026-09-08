@@ -17,11 +17,25 @@ class SettingsUiTest {
         val url = "git@github.com:owner/repository.git"
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("Repository URL (HTTPS or SSH)"))
         compose.onNodeWithText("Repository URL (HTTPS or SSH)").performScrollTo().performTextReplacement(url)
-        compose.onNodeWithText("Generate SSH key").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("SSH key").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("SynchroGit"))
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("Repository URL (HTTPS or SSH)"))
         compose.onNodeWithText("Repository URL (HTTPS or SSH)").performScrollTo()
         compose.onNodeWithText(url).assertExists()
+    }
+    @Test fun transportSelectionConvertsHostedUrlsAndShowsMatchingCredentials() {
+        val list = compose.onNodeWithTag("settings-list")
+        list.performScrollToNode(hasText("Repository URL (HTTPS or SSH)"))
+        compose.onNodeWithText("Repository URL (HTTPS or SSH)").performScrollTo().performTextReplacement("https://gitlab.com/group/repository.git")
+        compose.onNodeWithTag("Authentication").performScrollTo().performClick()
+        compose.onNodeWithText("SSH key").performClick()
+        compose.onNodeWithText("git@gitlab.com:group/repository.git").assertExists()
+        compose.onNodeWithText("Access token (blank for public repositories)").assertDoesNotExist()
+        compose.onNodeWithTag("SSH key").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("Authentication").performScrollTo().performClick()
+        compose.onNodeWithText("HTTPS token").performClick()
+        compose.onNodeWithText("https://gitlab.com/group/repository.git").assertExists()
+        compose.onNodeWithText("Access token (blank for public repositories)").performScrollTo().assertIsDisplayed()
     }
     @Test fun staleServiceMessageDoesNotClaimAStoppedEngineIsRunning() {
         SettingsStore(compose.activity).message = "Continuous synchronization is running"

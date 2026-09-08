@@ -143,20 +143,66 @@ class NativeSyncTest {
         assertFalse(store.auth("$path-other").has("password"))
     }
 
-    @Test fun sshKeysAreEncryptedAndReusedForTheSameRepository() {
+    @Test fun sharedSshKeysAreEncryptedAndUsableForDifferentRepositories() {
         val store = SettingsStore(context)
-        val path = File(context.filesDir, "ssh-key-test-${System.nanoTime()}").canonicalPath
-        val publicKey = store.generateSshKey(path)
-        assertTrue(publicKey.startsWith("ssh-ed25519 "))
-        assertEquals(publicKey, store.generateSshKey(path))
+        val previousDefaults = store.gitDefaults()
+        val generated = store.generateSshKey("Reusable test key")
         val prefs = context.getSharedPreferences("synchrogit", 0)
-        val encrypted = prefs.getString("ssh:$path", "")!!
-        assertFalse(encrypted.contains("PRIVATE KEY"))
-        assertFalse(encrypted.contains(publicKey))
-        assertEquals("", store.sshPublicKey("$path-other"))
-        prefs.edit().putString("ssh:$path-other", encrypted).commit()
-        assertTrue(runCatching { store.sshPublicKey("$path-other") }.isFailure)
-        prefs.edit().remove("ssh:$path").remove("ssh:$path-other").commit()
+        val entry = "ssh-key:${generated.id}"
+        try {
+            assertTrue(generated.publicKey.startsWith("ssh-ed25519 "))
+            assertTrue(runCatching { store.generateSshKey(generated.name) }.isFailure)
+            val encrypted = prefs.getString(entry, "")!!
+            assertFalse(encrypted.contains("PRIVATE KEY"))
+            assertFalse(encrypted.contains(generated.publicKey))
+            store.saveGitDefaults(JSONObject().put("ssh_key_id", generated.id).put("name", "Shared Author").put("email", "shared@example.com"))
+            for (name in listOf("first", "second")) {
+                val path = File(context.filesDir, "key-reuse-$name").path
+                val auth = JSONObject().put("url", "git@gitlab.com:group/$name.git")
+                store.applyConnection(path, auth)
+                assertEquals(generated.id, store.resolvedAuth(auth).getString("ssh_key_id"))
+                assertEquals("Shared Author", store.resolvedAuth(auth).getString("name"))
+            }
+            val override = JSONObject().put("name", "Local Author").put("ssh_key_id", generated.id)
+            assertEquals("Local Author", store.resolvedAuth(override).getString("name"))
+            assertEquals("shared@example.com", store.resolvedAuth(override).getString("email"))
+            assertEquals(generated.publicKey, SettingsStore(context).sshKeys().single { it.id == generated.id }.publicKey)
+            prefs.edit().putString("ssh-key:tampered", encrypted).commit()
+            assertTrue(runCatching { store.sshKeys() }.isFailure)
+        } finally {
+            prefs.edit().remove(entry).remove("ssh-key:tampered").commit()
+            store.saveGitDefaults(previousDefaults)
+        }
+    }
+
+    @Test fun legacySshKeyMigrationPreservesKeyAndRepositorySelection() {
+        val store = SettingsStore(context)
+        val path = File(context.filesDir, "legacy-key-${System.nanoTime()}").canonicalPath
+        val entry = "ssh:$path"
+        val generated = call("generate_ssh_key")
+        // Recreate the exact v26.9.1 encrypted storage format in the test app.
+        store.saveAuth(path, JSONObject().put("url", "git@github.com:owner/repo.git").put("password", "legacy-token"))
+        val keystore = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, keystore.getKey("synchrogit.credentials", null))
+        cipher.updateAAD(entry.toByteArray())
+        val encrypted = JSONObject().put("iv", android.util.Base64.encodeToString(cipher.iv, android.util.Base64.NO_WRAP))
+            .put("data", android.util.Base64.encodeToString(cipher.doFinal(generated.toString().toByteArray()), android.util.Base64.NO_WRAP)).toString()
+        val prefs = context.getSharedPreferences("synchrogit", 0)
+        prefs.edit().putString(entry, encrypted).commit()
+        val migrated = SettingsStore(context)
+        val id = migrated.auth(path).getString("ssh_key_id")
+        try {
+            assertFalse(prefs.contains(entry))
+            assertEquals("legacy-token", migrated.auth(path).getString("password"))
+            val info = migrated.sshKeys().single { it.id == id }
+            assertEquals(generated.getString("public_key"), info.publicKey)
+            assertTrue(info.migrated)
+            migrated.applyConnection(path, migrated.auth(path))
+            migrated.applyConnection("$path-second", JSONObject().put("url", "git@github.com:owner/second.git").put("ssh_key_id", id))
+            assertEquals(id, SettingsStore(context).auth(path).getString("ssh_key_id"))
+            assertEquals(1, SettingsStore(context).sshKeys().count { it.id == id })
+        } finally { prefs.edit().remove("ssh-key:$id").remove("auth:$path").remove(entry).commit() }
     }
 
     @Test fun sshCloneFetchPushAndHostKeyVerification() {
