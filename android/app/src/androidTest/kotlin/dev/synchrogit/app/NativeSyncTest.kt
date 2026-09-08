@@ -32,6 +32,8 @@ class NativeSyncTest {
 
     private fun syncFixture(root: File) {
         assertTrue(root.mkdirs())
+        // The remote models a server, not another user-selected shared worktree.
+        val remote = File(context.cacheDir, "remote-test-${System.nanoTime()}")
         val store = SettingsStore(context)
         val originalConfig = store.configFile.takeIf { it.exists() }?.readBytes()
         try {
@@ -46,9 +48,10 @@ class NativeSyncTest {
                     file.outputStream().use { zip.copyTo(it) }
                 }
             }
+            File(root, "remote.git").copyRecursively(remote)
             for (name in listOf("a", "b")) {
                 val file = File(root, "$name/.git/config")
-                file.writeText(file.readText().replace("SYNCHROGIT_TEST_REMOTE", File(root, "remote.git").absolutePath))
+                file.writeText(file.readText().replace("SYNCHROGIT_TEST_REMOTE", remote.canonicalPath))
             }
             fun configText(path: File, watch: Boolean = false): String {
                 val settings = JSONObject().put("repo", JSONArray().put(JSONObject().put("path", path.absolutePath)))
@@ -114,17 +117,20 @@ class NativeSyncTest {
             call("stop")
             if (originalConfig == null) store.configFile.delete() else store.configFile.writeBytes(originalConfig)
             root.deleteRecursively()
+            remote.deleteRecursively()
         }
     }
 
     @Test fun httpsCloneUsesAndroidTrustStore() {
-        val path = File(context.cacheDir, "https-test-${System.nanoTime()}")
-        try {
-            call("clone", JSONObject().put("path", path.absolutePath)
-                .put("url", "https://github.com/octocat/Hello-World.git").put("name", "Android Test").put("email", "test@example.com"))
-            assertTrue(File(path, ".git/HEAD").exists())
-            assertTrue(File(path, "README").exists())
-        } finally { path.deleteRecursively() }
+        for (parent in listOf(context.cacheDir, Environment.getExternalStorageDirectory())) {
+            val path = File(parent, "https-test-${System.nanoTime()}").canonicalFile
+            try {
+                call("clone", JSONObject().put("path", path.absolutePath)
+                    .put("url", "https://github.com/octocat/Hello-World.git").put("name", "Android Test").put("email", "test@example.com"))
+                assertTrue(File(path, ".git/HEAD").exists())
+                assertTrue(File(path, "README").exists())
+            } finally { path.deleteRecursively() }
+        }
     }
 
     @Test fun credentialsAreEncryptedAndBoundToTheRepositoryPath() {
