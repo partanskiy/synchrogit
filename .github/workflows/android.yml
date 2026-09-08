@@ -34,7 +34,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends openssh-server
           sudo mkdir -p /run/sshd
-          python3 scripts/android-ssh-fixture.py
+          # A live SSH fixture must never be restored from the Rust build cache.
+          rm -rf target/android-ssh-fixture
+          python3 scripts/android-ssh-fixture.py --directory "$RUNNER_TEMP/synchrogit-ssh-fixture"
       - name: Build native libraries and test fixtures
         run: |
           scripts/build-android.sh
@@ -63,7 +65,7 @@ jobs:
             android/gradlew -p android connectedDebugAndroidTest --console=plain
       - name: Stop disposable SSH Git server
         if: always()
-        run: python3 scripts/android-ssh-fixture.py --stop
+        run: python3 scripts/android-ssh-fixture.py --directory "$RUNNER_TEMP/synchrogit-ssh-fixture" --stop
       - uses: actions/upload-artifact@v4
         if: always()
         with:
