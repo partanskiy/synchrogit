@@ -108,7 +108,9 @@ async fn wait_for_status_cycle(socket: &Path) -> Response {
         if let Response::Status { repos } = &response
             && repos
                 .first()
-                .is_some_and(|repo| repo.last_sync.last_cycle_at.is_some())
+                // A filesystem event can start a second cycle after startup.
+                // The last result remains present while that cycle is running.
+                .is_some_and(|repo| !repo.running && repo.last_sync.last_cycle_at.is_some())
         {
             return response;
         }
