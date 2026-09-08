@@ -23,4 +23,11 @@ class SettingsUiTest {
         compose.onNodeWithText("Repository URL (HTTPS or SSH)").performScrollTo()
         compose.onNodeWithText(url).assertExists()
     }
+    @Test fun staleServiceMessageDoesNotClaimAStoppedEngineIsRunning() {
+        SettingsStore(compose.activity).message = "Continuous synchronization is running"
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithText("Continuous sync is stopped").assertIsDisplayed()
+        compose.onNodeWithText("Continuous synchronization is running").assertDoesNotExist()
+        compose.onNodeWithText("Synchronization is stopped; press Start to resume").assertIsDisplayed()
+    }
 }

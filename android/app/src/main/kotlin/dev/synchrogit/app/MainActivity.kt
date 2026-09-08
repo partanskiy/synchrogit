@@ -83,7 +83,11 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(Unit) {
             while (isActive) {
                 val current = withContext(NativeBridge.dispatcher) { NativeBridge.request("status") }
-                status = current; running = current.optBoolean("running"); message = store.message
+                status = current; running = current.optBoolean("running")
+                val savedMessage = store.message
+                message = if (!running && savedMessage in listOf("Continuous synchronization is running", "Stopping synchronization…")) {
+                    "Synchronization is stopped; press Start to resume"
+                } else savedMessage
                 delay(1000)
             }
         }
