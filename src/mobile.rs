@@ -1,6 +1,7 @@
 //! Synchronous boundary used by mobile UI threads via Dispatchers.IO. All
 //! repository workers, timers and filesystem watching remain in the Rust core.
 use crate::config::{load_from_path, parse_str};
+use crate::git::auth::{self, Authentication, Connection};
 use crate::git::embedded::{self, Credentials};
 use crate::runtime::Supervisor;
 use crate::{Result, SynchrogitError};
@@ -32,6 +33,14 @@ pub enum Request {
         url: String,
         username: String,
         password: String,
+    },
+    GenerateSshKey,
+    SshCredentials {
+        path: PathBuf,
+        url: String,
+        private_key: String,
+        #[serde(default)]
+        host_fingerprint: String,
     },
     Clone {
         path: PathBuf,
@@ -146,9 +155,12 @@ impl Engine {
                 username,
                 password,
             } => {
-                // The app accepts HTTPS only. Never allow a token to be used on
+                // Tokens are HTTPS-only. Never allow a token to be used on
                 // plaintext HTTP or an unrelated redirected repository URL.
-                if !url.starts_with("https://") {
+                if !matches!(
+                    auth::connection(&url).map_err(git_error)?,
+                    Connection::Https
+                ) {
                     return Err(SynchrogitError::Config(
                         "Android authentication requires an HTTPS URL".into(),
                     ));
@@ -160,10 +172,30 @@ impl Engine {
                     } else {
                         Some(Credentials {
                             url,
-                            username,
-                            password,
+                            authentication: Authentication::Https {
+                                username,
+                                password: password.into(),
+                            },
                         })
                     },
+                );
+                Ok(json!({}))
+            }
+            Request::GenerateSshKey => auth::generate_ssh_key().map_err(git_error),
+            Request::SshCredentials {
+                path,
+                url,
+                private_key,
+                host_fingerprint,
+            } => {
+                let authentication =
+                    Authentication::ssh(&url, private_key, &host_fingerprint).map_err(git_error)?;
+                embedded::set_credentials(
+                    path,
+                    Some(Credentials {
+                        url,
+                        authentication,
+                    }),
                 );
                 Ok(json!({}))
             }
@@ -178,11 +210,7 @@ impl Engine {
                         "stop synchronization before cloning".into(),
                     ));
                 }
-                if !url.starts_with("https://") {
-                    return Err(SynchrogitError::Config(
-                        "Android cloning requires an HTTPS URL".into(),
-                    ));
-                }
+                auth::connection(&url).map_err(git_error)?;
                 validate_identity(&name, &email)?;
                 #[cfg(target_os = "android")]
                 {
@@ -217,11 +245,7 @@ impl Engine {
                     .and_then(|()| config.set_str("user.email", &email))
                     .map_err(|e| SynchrogitError::Other(e.to_string()))?;
                 if let Some(url) = url.filter(|url| !url.is_empty()) {
-                    if !url.starts_with("https://") {
-                        return Err(SynchrogitError::Config(
-                            "Android connections require HTTPS".into(),
-                        ));
-                    }
+                    auth::connection(&url).map_err(git_error)?;
                     let remote = remote
                         .filter(|name| !name.is_empty())
                         .unwrap_or_else(|| "origin".into());
@@ -257,4 +281,7 @@ fn validate_identity(name: &str, email: &str) -> Result<()> {
     }
     git2::Signature::now(name, email).map_err(|e| SynchrogitError::Config(e.to_string()))?;
     Ok(())
+}
+fn git_error(error: git2::Error) -> SynchrogitError {
+    SynchrogitError::Config(error.message().into())
 }

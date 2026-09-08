@@ -25,6 +25,8 @@ The external backend retains Git's configuration, credential helpers, SSH
 configuration and hooks. The embedded backend supports HTTPS credential helpers
 and SSH agents on desktop. It uses libgit2's certificate/host verification and
 does not run Git hooks, signing commands, or arbitrary SSH configuration.
+Android additionally supports per-repository Ed25519 keys encrypted with Android
+Keystore and explicit SSH host-key fingerprints; see [Android setup](../android/README.md#ssh-authentication).
 Embedded ignore patterns support ordinary Git pathspecs; advanced `:(...)`
 pathspec magic requires the external backend. Network deadlines are cooperative:
 a blocked native transport must finish before the next operation can start.
