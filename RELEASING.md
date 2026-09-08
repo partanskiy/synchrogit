@@ -67,18 +67,24 @@ The `Update AUR` workflow can also be started by hand (workflow dispatch with a 
 The Linux build jobs also produce `.deb` and `.rpm` packages (via `cargo-deb` and `cargo-generate-rpm`, metadata in `Cargo.toml`) and attach them to the GitHub Release. After a successful `Release` run:
 
 - `Update APT repo` downloads the release `.deb`s, regenerates the flat signed repo, and pushes it to [`partanskiy/apt-repo`](https://github.com/partanskiy/apt-repo) (served via GitHub Pages). Needs the `APT_SSH_PRIVATE_KEY` (deploy key) and `APT_GPG_PRIVATE_KEY` (repo signing key) secrets.
-- COPR builds itself, with no credentials in this repository: the [`partanskiy/synchrogit`](https://copr.fedorainfracloud.org/coprs/partanskiy/synchrogit/) COPR project uses a *custom source method* — a script stored in the project settings that resolves the latest GitHub release, downloads its tarball, and renders `packaging/copr/synchrogit.spec.in` **from `main`** (so packaging fixes do not require a re-tag). A GitHub release-event webhook on this repository targets COPR’s **custom** webhook endpoint with the package name `synchrogit`, so rebuilding happens after release publication. The GitHub-specific COPR webhook handler is for SCM packages and does not rebuild this custom-source package. Nothing expires; re-trigger manually with `copr-cli build-package synchrogit --name synchrogit` if ever needed.
+- The **Update COPR** workflow requests one build after the `Release` workflow
+  completes successfully. The [`partanskiy/synchrogit`](https://copr.fedorainfracloud.org/coprs/partanskiy/synchrogit/)
+  COPR project uses a custom source method: its source script resolves the latest
+  GitHub release, downloads its tarball, and renders
+  `packaging/copr/synchrogit.spec.in` **from `main`**, so packaging fixes do not
+  require a new tag. The workflow needs the `COPR_WEBHOOK_URL` Actions secret,
+  containing the package-specific **custom** webhook URL. This URL authorizes
+  builds; keep it out of source code and logs. The GitHub-specific COPR webhook
+  endpoint is for SCM packages and does not rebuild this custom-source package.
 
-The direct COPR release webhook also reacts to release asset/notes edits and can
-start many identical builds. To switch to one request after a completed release:
+Use **Update COPR** manually to rebuild the latest stable release when needed.
+Automatic requests skip old releases, failed workflows and forks. Release asset
+and notes edits do not trigger builds. Keep the old GitHub release-event webhook
+disabled: it would start duplicate builds for these edits.
 
-1. With the repository owner's approval, place the existing package-specific
-   custom webhook URL in the `COPR_WEBHOOK_URL` Actions secret. The URL itself
-   authorizes builds; do not put it in source code or logs.
-2. Disable the old GitHub release webhook before enabling this workflow on main.
-3. Use **Update COPR** to request the latest stable release once. Subsequent
-   successful Release workflow completions trigger it automatically. Old releases,
-   failed workflows and forks are skipped. Release edits do not trigger it.
+When configuring another repository, obtain the owner's approval before adding
+its custom webhook URL to `COPR_WEBHOOK_URL`, and disable any direct release
+webhook before enabling the workflow.
 
 If a request times out, check COPR before rerunning: it may already have queued
 the build. The workflow deliberately does not retry POST requests automatically.

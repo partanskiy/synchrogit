@@ -25,13 +25,32 @@ An in-place update to a locally signed v26.9.1 APK retained the repository,
 configuration and encrypted HTTPS token. After starting synchronization again,
 the same two-way GitHub checks passed without re-entering credentials.
 
+The final v26.9.1 APK downloaded from GitHub Release was then installed in place.
+Its signature matched the existing installation, and it successfully pushed a
+phone edit to GitHub and pulled a Linux reply with the saved HTTPS credentials.
+
+With the owner's approval, that release app generated an Ed25519 key for the
+existing test worktree. Only the public key was registered as a write-enabled
+GitHub deploy key, restricted to that test repository. The private key stayed
+in the app's encrypted storage. The existing clone's origin was changed to SSH
+through **Use existing**, and GitHub's built-in host-key verification was used.
+The released APK then passed these real GitHub SSH checks:
+
+- Linux watcher → GitHub → Android timer: about 9 seconds.
+- Android watcher → GitHub → Linux timer: about 11 seconds.
+- Binary bytes and Unicode filenames/text survived unchanged.
+- After force-stopping and reopening the app, both directions worked again
+  with the saved SSH key and the app in the home-screen background (about
+  22 seconds for the Linux edit and 12 seconds for the Android reply).
+
 The Android SSH development build additionally passed all nine instrumentation
 tests on the same phone. These cover private/shared storage, real Git cycles,
 watcher events, foreground-service start/stop, Android TLS trust, encrypted
 credentials, SSH key generation/reuse, SSH clone/fetch/push, rejection of an
 incorrect SSH host fingerprint, Compose connection drafts across scrolling, and
 correct service status after an activity/process restart.
-SSH transport tests use a disposable loopback server, not a production account.
+The instrumentation SSH transport tests use a disposable loopback server;
+the release APK checks above use the private GitHub test repository.
 
 Long unattended operation, deep Doze, Samsung battery restrictions, reboot and
 the Android 15+ six-hour dataSync service limit require separate duration tests.
