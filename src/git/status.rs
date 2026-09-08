@@ -11,7 +11,8 @@ impl Git {
         }
     }
     pub async fn is_inside_work_tree(&self) -> Result<bool> {
-        self.probe(Operation::WorkTree).await
+        // Preserve ownership, permission and repository errors for diagnosis.
+        Ok(self.execute(Operation::WorkTree).await?.stdout_trim() == "true")
     }
     pub async fn has_upstream(&self) -> Result<bool> {
         self.probe(Operation::Upstream).await
