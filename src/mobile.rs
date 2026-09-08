@@ -81,6 +81,10 @@ impl Engine {
             }
             Request::Start { path } => {
                 let config = load_from_path(path)?; // Validate before stopping.
+                #[cfg(target_os = "android")]
+                for repo in config.config.resolved_repos() {
+                    crate::android::trust_repository(&repo.path)?;
+                }
                 self.stop();
                 let _guard = self.runtime.enter();
                 self.supervisor = Some(Supervisor::spawn_loaded(config)?);
@@ -91,6 +95,10 @@ impl Engine {
                     return Ok(json!({"continuous": true}));
                 }
                 let config = load_from_path(path)?.config;
+                #[cfg(target_os = "android")]
+                for repo in config.resolved_repos() {
+                    crate::android::trust_repository(&repo.path)?;
+                }
                 self.runtime.block_on(async {
                     for repo in config.resolved_repos() {
                         let git = crate::git::Git::embedded(&repo.path, repo.git_timeout);
@@ -176,6 +184,11 @@ impl Engine {
                     ));
                 }
                 validate_identity(&name, &email)?;
+                #[cfg(target_os = "android")]
+                {
+                    std::fs::create_dir_all(&path)?;
+                    crate::android::trust_repository(&path)?;
+                }
                 embedded::clone_repository(&url, &path, &name, &email, Duration::from_secs(120))?;
                 Ok(json!({}))
             }
@@ -192,6 +205,8 @@ impl Engine {
                     ));
                 }
                 validate_identity(&name, &email)?;
+                #[cfg(target_os = "android")]
+                crate::android::trust_repository(&path)?;
                 let repo = git2::Repository::open(path)
                     .map_err(|e| SynchrogitError::Other(e.to_string()))?;
                 let mut config = repo

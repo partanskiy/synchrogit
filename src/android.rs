@@ -5,10 +5,41 @@ use jni::{
     sys::jstring,
 };
 use serde_json::json;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 static CONFIGURED: OnceLock<std::result::Result<(), String>> = OnceLock::new();
 static ENGINE: OnceLock<Mutex<Engine>> = OnceLock::new();
+static GIT_CONFIG: OnceLock<PathBuf> = OnceLock::new();
+
+/// Android shared storage does not report files as owned by the app's UID.
+/// Allow only repositories explicitly selected by the user, in the app's
+/// private Git configuration. Keep libgit2 ownership validation enabled.
+pub(crate) fn trust_repository(path: &Path) -> crate::Result<()> {
+    let canonical = path.canonicalize()?;
+    let path = canonical
+        .to_str()
+        .ok_or_else(|| crate::SynchrogitError::Other("repository path is not UTF-8".into()))?;
+    let config_path = GIT_CONFIG.get().ok_or_else(|| {
+        crate::SynchrogitError::Other("Android Git configuration is not initialized".into())
+    })?;
+    let update = || -> std::result::Result<(), git2::Error> {
+        let mut config = git2::Config::open(config_path)?;
+        let mut present = false;
+        config
+            .entries(Some("^safe\\.directory$"))?
+            .for_each(|entry| {
+                if entry.value().ok() == Some(path) {
+                    present = true;
+                }
+            })?;
+        if !present {
+            config.set_multivar("safe.directory", "^$", path)?;
+        }
+        Ok(())
+    };
+    update().map_err(|error| crate::SynchrogitError::Other(error.to_string()))
+}
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_synchrogit_app_NativeBridge_call(
@@ -61,8 +92,20 @@ pub extern "system" fn Java_dev_synchrogit_app_NativeBridge_configure(
     mut env: JNIEnv,
     _class: JClass,
     certificates: JObjectArray,
+    git_config_directory: JString,
 ) {
     let result = CONFIGURED.get_or_init(|| {
+        let directory = PathBuf::from(String::from(
+            env.get_string(&git_config_directory)
+                .map_err(|e| e.to_string())?,
+        ));
+        let config_path = directory.join(".gitconfig");
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&config_path)
+            .map_err(|e| e.to_string())?;
         let count = env
             .get_array_length(&certificates)
             .map_err(|e| e.to_string())?;
@@ -73,10 +116,20 @@ pub extern "system" fn Java_dev_synchrogit_app_NativeBridge_configure(
         // rejects requests until this OnceLock is complete. No libgit2 workers
         // can exist yet, and these global options are never changed afterward.
         unsafe {
+            for level in [
+                git2::ConfigLevel::Global,
+                git2::ConfigLevel::XDG,
+                git2::ConfigLevel::System,
+            ] {
+                git2::opts::set_search_path(level, &directory).map_err(|e| e.to_string())?;
+            }
             git2::opts::set_server_connect_timeout_in_milliseconds(60_000)
                 .map_err(|e| e.to_string())?;
             git2::opts::set_server_timeout_in_milliseconds(60_000).map_err(|e| e.to_string())?;
         }
+        GIT_CONFIG
+            .set(config_path)
+            .map_err(|_| "Android Git configuration already initialized")?;
         // openssl-src builds Android with no-stdio; loading a PEM file through
         // OpenSSL always fails. Parse the OS trust anchors from DER in memory.
         for index in 0..count {

@@ -38,6 +38,10 @@ Removing a repository from settings leaves its files intact. Uninstalling the
 app deletes app-private repositories and credentials; use shared folders if
 other editors need direct access to the files.
 
+Shared storage reports ownership differently from private app storage. The app
+adds explicitly selected repository paths to its private Git `safe.directory`
+list; libgit2 ownership verification remains enabled.
+
 ## Build and test
 
 Install Rust Android targets, JDK 21, SDK 36, build-tools 35.0.0 and NDK
