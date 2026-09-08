@@ -55,3 +55,17 @@ the release APK checks above use the private GitHub test repository.
 Long unattended operation, deep Doze, Samsung battery restrictions, reboot and
 the Android 15+ six-hour dataSync service limit require separate duration tests.
 USB-connected tests do not establish reliability in those conditions.
+
+## v26.9.2 settings and shared SSH keys
+
+The development build passed all 14 instrumentation tests on the same Samsung
+SM-S936B / Android 16. New coverage verifies legacy-key migration without
+changing public key material, reuse of a shared key across repository paths,
+shared author defaults with local overrides, URL/authentication selection,
+inheritance of a disabled pull setting, system light/dark and dynamic color
+schemes, and whole-row switch interaction with a 1.8× font scale.
+
+The physical device's system theme was dark. Visual inspection confirmed that
+the new settings screen uses the system dark palette and centers the scheduled
+sync switch with its label. No account key registration or change to the
+existing test deploy key's server permissions is part of this update.

@@ -9,8 +9,9 @@ The universal APK contains ARM64 and x86_64 libraries with 16 KiB ELF alignment.
 ## Use
 
 1. Grant folder access for a shared folder, or use an app-private folder.
-2. Enter the repository name and absolute canonical path. Supply an HTTPS or SSH
-   URL, configure authentication as described below, and enter commit author name/email.
+2. Set a shared commit author and SSH key in **Git defaults**. Enter the repository
+   name and absolute canonical path, choose SSH or HTTPS, and supply its URL.
+   A repository can override the shared author or select another SSH key.
 3. Choose **Clone** for a new empty destination, or **Use existing** for a Git
    working tree already present on the phone. Save settings.
 4. Start continuous sync. The notification provides a Stop action. The app shows
@@ -28,33 +29,67 @@ execution can be later). It can continue after the continuous service stops and
 survives process death/reboot, but it does not provide immediate file watching.
 Android's Force stop disables background work until the app is opened again.
 
-Settings use the same config.toml schema as desktop. Import/export includes
-settings only. Credentials are encrypted with an Android Keystore AES-GCM key,
-bound to the repository path, excluded from backups and never written to TOML.
-TLS uses Android's trusted CA certificates; hostname/certificate checks remain
-enabled. Do not put a token into a repository URL.
+The app follows the system light/dark theme and uses the system's dynamic colors
+on Android 12 and later. Earlier versions use matching Material light/dark colors.
+
+Synchronization settings use the same `config.toml` schema as desktop:
+**Defaults** maps to `[defaults]`, and each repository maps to `[[repo]]`.
+Pull and push overrides offer **Use defaults**, **On**, and **Off**; inheritance
+shows the actual default and removes the override from exported TOML.
+
+**Git defaults** provides a shared commit author and a default SSH key. Author
+fields left blank in a repository inherit these values; saving applies the
+resolved author to existing Git worktrees. Leaving both shared and local author
+fields blank preserves a manually configured Git identity. Repository URLs,
+credentials, author preferences and key selections are stored separately from
+SynchroGit's TOML, like desktop Git authentication and author configuration.
+Import/export contains synchronization settings only. HTTPS tokens remain
+bound to the repository path; SSH keys are shared through explicit selections.
+TLS uses Android's trusted CA certificates. Do not put a token into a URL.
 
 ### SSH authentication
 
-Enter an SSH URL such as `git@github.com:owner/repository.git` or
-`ssh://git@ssh.github.com:443/owner/repository.git`, then choose **Generate SSH key**.
-The app generates a separate Ed25519 key for that repository using RustCrypto
-and the operating system's random source. **Copy public key**, add it in GitHub
-repository **Settings → Deploy keys**, and enable **Allow write access**. Then
-clone and save settings. For an existing HTTPS clone, change the URL and choose
-**Use existing** before saving to update its remote.
+Open **Git defaults → Manage SSH keys**, give a key a recognizable name, and
+choose **Generate SSH key**. The Rust core generates an Ed25519 key using the
+operating system's random source. The key belongs to the app and can be selected
+for multiple repositories; generating another named key creates a distinct key.
+Choose a default in **Git defaults**, or choose a specific key in a repository.
 
-The private key is encrypted with an Android Keystore AES-GCM key, bound to the
-repository path, and supplied to libgit2 only in memory. It is not itself a
-non-exportable hardware SSH key. It never goes into the repository, TOML export,
-clipboard or backup. Repeated generation for the same path reuses the key;
-uninstalling the app deletes it. Changing the repository path requires a new key.
+**Copy public key** and register it on your Git server. An account SSH key on
+GitHub or GitLab can access that account's repositories. A deploy key can provide
+more limited access; GitHub deploy keys are restricted to a single repository.
+The app's ability to reuse a key does not expand permissions on the server.
 
-GitHub.com on port 22 and ssh.github.com on port 443 are checked against
-[GitHub's published server fingerprints](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints).
-For another server, enter its `SHA256:...` host fingerprint, obtained from its
-administrator over a trusted channel. A changed or unknown key is rejected;
-the app never automatically trusts the first server that answers.
+Choose **SSH key** authentication and enter `git@github.com:owner/repository.git`
+or `git@gitlab.com:group/repository.git`. Switching between SSH and HTTPS converts
+standard GitHub/GitLab URLs; custom server URLs must be entered explicitly.
+Then clone, or choose **Use existing** for a working tree already on the phone,
+and save settings. Saving also applies connection changes to existing worktrees.
+
+Private keys are encrypted with an Android Keystore AES-GCM key and supplied to
+libgit2 only in memory. They are not hardware SSH keys themselves. Encrypted
+records live in the app's private `shared_prefs/synchrogit.xml`, bound to stable
+key IDs rather than repository paths. On a typical device the release app's
+private data directory is `/data/user/0/dev.synchrogit.app/`. Private keys never
+enter a repository, TOML export, clipboard, or backup; uninstalling deletes them.
+
+When upgrading from v26.9.1, existing repository keys are atomically moved to the
+shared key list, preserving the key material and each repository's selection.
+They are labelled as existing keys; server-side permissions are unchanged, and
+no account registration or new key generation happens during migration.
+
+Server identity is a separate check from your client authentication key. Pins
+verified on 2026-09-08 are included for:
+
+- `github.com:22` and `ssh.github.com:443`, from
+  [GitHub's published fingerprints](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints).
+- `gitlab.com:22` and `altssh.gitlab.com:443`, from
+  [GitLab's published fingerprints](https://docs.gitlab.com/user/gitlab_com/#ssh-host-keys-fingerprints)
+  and [live instance configuration](https://gitlab.com/help/instance_configuration).
+
+Self-managed GitLab and other servers need an explicit `SHA256:...` fingerprint
+from their administrator over a trusted channel. Unknown or changed server keys
+are rejected; the app never automatically trusts the first server that answers.
 
 For HTTPS, enter the username and access token; public repositories can leave
 the token blank. GitHub private repositories can use a fine-grained token
@@ -93,7 +128,9 @@ files, conflict copies, remote deletions, filesystem watching in private and
 shared storage, foreground-service start/stop, Android Keystore,
 HTTPS certificate validation through a public clone, and loading the Compose UI.
 It also checks real SSH clone/fetch/push, rejection of an incorrect server key,
-and encryption/reuse of generated Ed25519 keys. The SSH fixture requires a Linux
+encrypted shared SSH keys, migration of legacy keys, reusable author defaults,
+system dark/light and dynamic colors, large-font switch interaction, explicit
+authentication selection, and three-state overrides. The SSH fixture requires a Linux
 host with OpenSSH server installed. It listens only on loopback, authorizes a
 disposable key, and restricts commands to its temporary Git repository; it does
 not use the developer's SSH keys. Remove `target/android-ssh-fixture` before

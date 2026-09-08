@@ -232,7 +232,10 @@ impl Engine {
                         "stop synchronization before changing repository identity".into(),
                     ));
                 }
-                validate_identity(&name, &email)?;
+                let update_author = !name.is_empty() || !email.is_empty();
+                if update_author {
+                    validate_identity(&name, &email)?;
+                }
                 #[cfg(target_os = "android")]
                 crate::android::trust_repository(&path)?;
                 let repo = git2::Repository::open(path)
@@ -240,10 +243,12 @@ impl Engine {
                 let mut config = repo
                     .config()
                     .map_err(|e| SynchrogitError::Other(e.to_string()))?;
-                config
-                    .set_str("user.name", &name)
-                    .and_then(|()| config.set_str("user.email", &email))
-                    .map_err(|e| SynchrogitError::Other(e.to_string()))?;
+                if update_author {
+                    config
+                        .set_str("user.name", &name)
+                        .and_then(|()| config.set_str("user.email", &email))
+                        .map_err(|e| SynchrogitError::Other(e.to_string()))?;
+                }
                 if let Some(url) = url.filter(|url| !url.is_empty()) {
                     auth::connection(&url).map_err(git_error)?;
                     let remote = remote

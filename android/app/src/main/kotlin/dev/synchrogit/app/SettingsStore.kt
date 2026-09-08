@@ -9,14 +9,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.security.KeyStore
+import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+data class SshKeyInfo(val id: String, val name: String, val publicKey: String, val fingerprint: String, val migrated: Boolean)
+
 class SettingsStore(private val context: Context) {
     val configFile = File(context.filesDir, "config.toml")
     private val preferences = context.getSharedPreferences("synchrogit", Context.MODE_PRIVATE)
+    init { migrateLegacySshKeys() }
     var message: String
         get() = preferences.getString("message", "Stopped") ?: "Stopped"
         set(value) { preferences.edit().putString("message", value).apply() }
@@ -51,23 +55,53 @@ class SettingsStore(private val context: Context) {
     fun saveAuth(path: String, auth: JSONObject) {
         saveEncrypted("auth:$path", path, auth)
     }
+    fun gitDefaults(): JSONObject = readEncrypted("git-defaults", "git-defaults")
+    fun saveGitDefaults(value: JSONObject) = saveEncrypted("git-defaults", "git-defaults", value)
+    fun resolvedAuth(auth: JSONObject): JSONObject {
+        val defaults = gitDefaults()
+        return JSONObject(auth.toString()).also { resolved ->
+            for (field in listOf("name", "email", "ssh_key_id")) {
+                if (resolved.optString(field).isBlank()) resolved.put(field, defaults.optString(field))
+            }
+        }
+    }
     private fun saveEncrypted(entry: String, binding: String, value: JSONObject) {
+        check(preferences.edit().putString(entry, encrypted(binding, value)).commit()) { "Cannot save encrypted credentials" }
+    }
+    private fun encrypted(binding: String, value: JSONObject): String {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         cipher.updateAAD(binding.toByteArray())
         val data = cipher.doFinal(value.toString().toByteArray())
-        check(preferences.edit().putString(entry, JSONObject()
+        return JSONObject()
             .put("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .put("data", Base64.encodeToString(data, Base64.NO_WRAP)).toString()).commit()) { "Cannot save encrypted credentials" }
+            .put("data", Base64.encodeToString(data, Base64.NO_WRAP)).toString()
     }
-    fun sshPublicKey(path: String): String = readEncrypted("ssh:$path", "ssh:$path").optString("public_key")
-    fun generateSshKey(path: String): String {
-        require(File(path).isAbsolute && File(path).canonicalPath == path) { "Choose a canonical repository folder before generating its SSH key" }
-        val existing = sshPublicKey(path)
-        if (existing.isNotEmpty()) return existing
-        val key = NativeBridge.request("generate_ssh_key")
-        saveEncrypted("ssh:$path", "ssh:$path", key)
-        return key.getString("public_key")
+    private fun keyInfo(id: String, value: JSONObject) = SshKeyInfo(id, value.getString("name"),
+        value.getString("public_key"), value.optString("fingerprint"), value.optBoolean("migrated"))
+    fun sshKeys(): List<SshKeyInfo> = preferences.all.keys.filter { it.startsWith("ssh-key:") }.map { entry ->
+        keyInfo(entry.removePrefix("ssh-key:"), readEncrypted(entry, entry))
+    }.sortedBy { it.name }
+    fun generateSshKey(name: String): SshKeyInfo = synchronized(keyLock) {
+        require(name.isNotBlank()) { "Give the SSH key a name" }
+        require(sshKeys().none { it.name == name.trim() }) { "An SSH key already has this name; choose it from the list or use another name" }
+        val id = UUID.randomUUID().toString()
+        val key = NativeBridge.request("generate_ssh_key").put("name", name.trim())
+        saveEncrypted("ssh-key:$id", "ssh-key:$id", key)
+        keyInfo(id, key)
+    }
+    private fun migrateLegacySshKeys() = synchronized(keyLock) {
+        for (entry in preferences.all.keys.filter { it.startsWith("ssh:") }) {
+            val path = entry.removePrefix("ssh:")
+            val id = UUID.nameUUIDFromBytes(entry.toByteArray()).toString()
+            val destination = "ssh-key:$id"
+            val value = readEncrypted(entry, entry).put("name", "${File(path).name} (existing key)").put("migrated", true)
+            val auth = auth(path).put("ssh_key_id", id)
+            // One atomic preferences commit: never remove a working key before
+            // its replacement and repository reference have both been stored.
+            check(preferences.edit().putString(destination, encrypted(destination, value))
+                .putString("auth:$path", encrypted(path, auth)).remove(entry).commit()) { "Cannot migrate SSH key" }
+        }
     }
     fun applyConnection(path: String, auth: JSONObject) {
         val url = auth.optString("url")
@@ -76,11 +110,22 @@ class SettingsStore(private val context: Context) {
             NativeBridge.request("credentials", JSONObject().put("path", path).put("url", url)
                 .put("username", auth.optString("username", "git")).put("password", auth.optString("password")))
         } else {
-            val key = readEncrypted("ssh:$path", "ssh:$path")
-            check(key.has("private_key")) { "Generate an SSH key for this repository and add its public key to your Git server first" }
+            val id = resolvedAuth(auth).optString("ssh_key_id")
+            val key = readEncrypted("ssh-key:$id", "ssh-key:$id")
+            check(key.has("private_key")) { "Choose an SSH key in Git defaults or this repository, then register its public key on your Git server" }
             NativeBridge.request("ssh_credentials", JSONObject().put("path", path).put("url", url)
                 .put("private_key", key.getString("private_key")).put("host_fingerprint", auth.optString("host_fingerprint")))
         }
+    }
+    fun applyRepository(repo: JSONObject, auth: JSONObject) {
+        val path = repo.getString("path")
+        val resolved = resolvedAuth(auth)
+        val name = resolved.optString("name")
+        val email = resolved.optString("email")
+        // Empty author fields preserve an identity configured outside the UI.
+        if (File(path, ".git").exists()) NativeBridge.request("identity", JSONObject()
+            .put("path", path).put("name", name).put("email", email)
+            .put("remote", repo.optString("remote", "origin")).put("url", auth.optString("url")))
     }
     fun applyCredentials(settings: JSONObject = read()) {
         val repos = settings.getJSONArray("repo")
@@ -98,4 +143,5 @@ class SettingsStore(private val context: Context) {
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
         return generator.generateKey()
     }
+    companion object { private val keyLock = Any() }
 }

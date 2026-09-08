@@ -15,15 +15,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -33,7 +29,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { MaterialTheme { Surface(Modifier.fillMaxSize()) { SettingsScreen() } } }
+        setContent { SynchroGitTheme { Surface(Modifier.fillMaxSize()) { SettingsScreen() } } }
     }
 
     @Composable private fun SettingsScreen() {
@@ -41,6 +37,9 @@ class MainActivity : ComponentActivity() {
         // Keep connection drafts while a repository card scrolls out of the
         // LazyColumn. Credentials are persisted only by explicit actions.
         val connectionDrafts = remember { mutableStateMapOf<String, JSONObject>() }
+        var gitDefaults by remember { mutableStateOf(store.gitDefaults()) }
+        var sshKeys by remember { mutableStateOf(store.sshKeys()) }
+        var showSshKeys by remember { mutableStateOf(false) }
         var settings by remember { mutableStateOf(runCatching { store.read() }.getOrElse {
             store.message = it.message ?: "Cannot read configuration"
             JSONObject().put("defaults", JSONObject()).put("repo", JSONArray())
@@ -62,7 +61,18 @@ class MainActivity : ComponentActivity() {
             }
         }
         fun update(mutator: (JSONObject) -> Unit) { settings = JSONObject(settings.toString()).also(mutator) }
-        fun persist() { store.save(settings); store.applyCredentials(settings); store.message = "Settings saved" }
+        fun persist() {
+            store.saveGitDefaults(gitDefaults)
+            val repos = settings.getJSONArray("repo")
+            for (index in 0 until repos.length()) {
+                val path = repos.getJSONObject(index).getString("path")
+                connectionDrafts[path]?.let { store.saveAuth(path, it) }
+                store.applyRepository(repos.getJSONObject(index), store.auth(path))
+            }
+            store.save(settings)
+            store.applyCredentials(settings)
+            store.message = "Settings saved"
+        }
         val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/toml")) { uri ->
             if (uri != null) perform {
                 val source = NativeBridge.request("encode_config", JSONObject().put("settings", settings)).getString("config")
@@ -101,6 +111,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        if (showSshKeys) SshKeyManager(sshKeys, !busy && !running && !periodic,
+            onGenerate = { name -> perform {
+                val generated = store.generateSshKey(name)
+                withContext(Dispatchers.Main) {
+                    sshKeys = store.sshKeys()
+                    if (gitDefaults.optString("ssh_key_id").isBlank()) gitDefaults = JSONObject(gitDefaults.toString()).put("ssh_key_id", generated.id)
+                }
+                store.message = "SSH key created; register its public key on your Git server"
+            } }, onDismiss = { showSshKeys = false })
         val repos = settings.optJSONArray("repo") ?: JSONArray()
         LazyColumn(Modifier.testTag("settings-list").fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
@@ -144,39 +163,53 @@ class MainActivity : ComponentActivity() {
             }
             item {
                 Text("Background checks", style = MaterialTheme.typography.titleMedium)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Scheduled sync (15 minutes or later)", modifier = Modifier.weight(1f))
-                    Switch(checked = periodic, enabled = !busy && !running, onCheckedChange = { enabled ->
-                        perform {
-                            if (enabled) persist()
-                            ScheduledSync.configure(this@MainActivity, enabled)
-                            withContext(Dispatchers.Main) { periodic = enabled }
-                            store.message = if (enabled) "Scheduled synchronization enabled" else "Scheduled synchronization disabled"
-                        }
-                    })
+                Toggle("Scheduled sync (15 minutes or later)", periodic, !busy && !running) { enabled ->
+                    perform {
+                        if (enabled) persist()
+                        ScheduledSync.configure(this@MainActivity, enabled)
+                        withContext(Dispatchers.Main) { periodic = enabled }
+                        store.message = if (enabled) "Scheduled synchronization enabled" else "Scheduled synchronization disabled"
+                    }
                 }
                 Text("Continuous mode watches local edits and uses the interval below. Android may suspend it during sleep and limits background data-sync services on Android 15+ to 6 hours per day. Scheduled mode does not watch edits immediately.", style = MaterialTheme.typography.bodySmall)
             }
             item {
-                Text("Defaults", style = MaterialTheme.typography.titleLarge)
-                val defaults = settings.optJSONObject("defaults") ?: JSONObject()
-                fun change(key: String, value: Any) = update { it.put("defaults", JSONObject(defaults.toString()).put(key, value)) }
-                Field("Pull interval", defaults.optString("interval", "15s"), !running && !busy) { change("interval", it) }
-                Field("Local edit debounce", defaults.optString("debounce", "2s"), !running && !busy) { change("debounce", it) }
-                var advanced by remember { mutableStateOf(false) }
-                TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "Hide advanced defaults" else "Advanced defaults") }
-                if (advanced) {
-                    for ((key, label, fallback) in listOf(Triple("backoff-min", "Minimum retry delay", "15s"), Triple("backoff-max", "Maximum retry delay", "5m"), Triple("git-timeout", "Git timeout", "60s"), Triple("commit-template", "Commit message", "{ts} ({host})"))) {
-                        Field(label, defaults.optString(key, fallback), !running && !busy) { change(key, it) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Defaults", style = MaterialTheme.typography.titleLarge)
+                    Text("[defaults] · applies to every repository", style = MaterialTheme.typography.bodySmall)
+                    val defaults = settings.optJSONObject("defaults") ?: JSONObject()
+                    fun change(key: String, value: Any) = update { it.put("defaults", JSONObject(defaults.toString()).put(key, value)) }
+                    Field("Pull interval", defaults.optString("interval", "15s"), !running && !busy) { change("interval", it) }
+                    Field("Local edit debounce", defaults.optString("debounce", "2s"), !running && !busy) { change("debounce", it) }
+                    var advanced by remember { mutableStateOf(false) }
+                    TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "Hide advanced defaults" else "Advanced defaults") }
+                    if (advanced) {
+                        for ((key, label, fallback) in listOf(Triple("backoff-min", "Minimum retry delay", "15s"), Triple("backoff-max", "Maximum retry delay", "5m"), Triple("git-timeout", "Git timeout", "60s"), Triple("commit-template", "Commit message", "{ts} ({host})"))) {
+                            Field(label, defaults.optString(key, fallback), !running && !busy) { change(key, it) }
+                        }
+                        Toggle("Pull remote changes", defaults.optBoolean("auto-pull", true), !running && !busy) { change("auto-pull", it) }
+                        Toggle("Push local commits", defaults.optBoolean("auto-push", true), !running && !busy) { change("auto-push", it) }
+                        Text("Conflicts keep the remote version and save local edits in a conflict copy.", style = MaterialTheme.typography.bodySmall)
                     }
-                    Toggle("Pull remote changes", defaults.optBoolean("auto-pull", true), !running && !busy) { change("auto-pull", it) }
-                    Toggle("Push local commits", defaults.optBoolean("auto-push", true), !running && !busy) { change("auto-push", it) }
-                    Text("Conflicts keep the remote version and save local edits in a conflict copy.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Git defaults", style = MaterialTheme.typography.titleLarge)
+                    Text("Shared author and SSH key. Repositories can override these below. Git connection settings are stored separately from config.toml.", style = MaterialTheme.typography.bodySmall)
+                    fun change(key: String, value: String) { gitDefaults = JSONObject(gitDefaults.toString()).put(key, value) }
+                    Field("Default commit author name", gitDefaults.optString("name"), !busy && !running && !periodic) { change("name", it) }
+                    Field("Default commit author email", gitDefaults.optString("email"), !busy && !running && !periodic) { change("email", it) }
+                    ChoiceField("Default SSH key", gitDefaults.optString("ssh_key_id"),
+                        listOf("" to "Choose per repository") + sshKeys.map { it.id to it.name }, !busy && !running && !periodic) { change("ssh_key_id", it) }
+                    OutlinedButton(onClick = { showSshKeys = true }) { Text("Manage SSH keys") }
                 }
             }
             items((0 until repos.length()).toList()) { index ->
                 val repo = repos.getJSONObject(index)
-                RepositoryEditor(repo, store, connectionDrafts, !busy && !running && !periodic,
+                RepositoryEditor(repo, settings.optJSONObject("defaults") ?: JSONObject(), gitDefaults, sshKeys, store, connectionDrafts,
+                    !busy && !running && !periodic, onManageKeys = { showSshKeys = true },
+                    saveGitDefaults = { store.saveGitDefaults(gitDefaults) },
                     onChange = { replacement -> update { it.getJSONArray("repo").put(index, replacement) } },
                     onRemove = { update { it.getJSONArray("repo").remove(index) } },
                     perform = { action -> perform(action) })
@@ -197,15 +230,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @Composable private fun RepositoryEditor(repo: JSONObject, store: SettingsStore, drafts: MutableMap<String, JSONObject>, enabled: Boolean, onChange: (JSONObject) -> Unit, onRemove: () -> Unit, perform: (suspend () -> Unit) -> Unit) {
+    @Composable private fun RepositoryEditor(repo: JSONObject, defaults: JSONObject, gitDefaults: JSONObject, sshKeys: List<SshKeyInfo>, store: SettingsStore, drafts: MutableMap<String, JSONObject>, enabled: Boolean, onManageKeys: () -> Unit, saveGitDefaults: () -> Unit, onChange: (JSONObject) -> Unit, onRemove: () -> Unit, perform: (suspend () -> Unit) -> Unit) {
         fun change(key: String, value: String) = onChange(JSONObject(repo.toString()).also { if (value.isBlank() && key !in listOf("name", "path")) it.remove(key) else it.put(key, value) })
         val path = repo.optString("path")
         val auth = drafts[path] ?: remember(path) { runCatching { store.auth(path) }.getOrDefault(JSONObject()) }
         fun authChange(key: String, value: String) { drafts[path] = JSONObject(auth.toString()).put(key, value) }
-        var publicKey by remember(path) { mutableStateOf(runCatching { store.sshPublicKey(path) }.getOrDefault("")) }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(repo.optString("name", "Repository"), style = MaterialTheme.typography.titleLarge)
+                Text("[[repo]] · overrides defaults only where set", style = MaterialTheme.typography.bodySmall)
                 Field("Name", repo.optString("name"), enabled) { change("name", it) }
                 Field("Folder path", path, enabled) { change("path", it) }
                 TextButton(enabled = enabled, onClick = { change("path", File(filesDir, "repositories/${repo.optString("name", "notes")}").canonicalPath) }) { Text("Use an app-private folder") }
@@ -219,42 +252,41 @@ class MainActivity : ComponentActivity() {
                         onChange(JSONObject(repo.toString()).put("ignore", JSONArray(text.lines().filter { it.isNotBlank() })))
                     }
                     for ((key, label) in listOf("auto-pull" to "Pull override", "auto-push" to "Push override")) {
-                        Row { TextButton(enabled = enabled, onClick = { onChange(JSONObject(repo.toString()).also { it.remove(key) }) }) { Text("$label: inherit") }
-                            Switch(checked = repo.optBoolean(key, true), enabled = enabled, onCheckedChange = { onChange(JSONObject(repo.toString()).put(key, it)) }) }
+                        BooleanOverride(label, if (repo.has(key)) repo.getBoolean(key) else null, defaults.optBoolean(key, true), enabled) { value ->
+                            onChange(JSONObject(repo.toString()).also { if (value == null) it.remove(key) else it.put(key, value) })
+                        }
                     }
                 }
-                Text("Connection and commit author", style = MaterialTheme.typography.titleMedium)
+                Text("Git connection", style = MaterialTheme.typography.titleMedium)
+                val transport = connectionTransport(auth)
+                ChoiceField("Authentication", transport, listOf("ssh" to "SSH key", "https" to "HTTPS token"), enabled) {
+                    drafts[path] = switchTransport(auth, it)
+                }
                 Field("Repository URL (HTTPS or SSH)", auth.optString("url"), enabled) { authChange("url", it) }
-                val ssh = auth.optString("url").let { it.isNotBlank() && !it.startsWith("https://") }
-                if (ssh) {
-                    Text("For example: git@github.com:owner/repository.git", style = MaterialTheme.typography.bodySmall)
-                    if (publicKey.isEmpty()) {
-                        OutlinedButton(enabled = enabled && path.isNotBlank(), onClick = { perform {
-                            val generated = store.generateSshKey(path)
-                            store.saveAuth(path, auth)
-                            withContext(Dispatchers.Main) { publicKey = generated }
-                            store.message = "SSH key created; add the public key to your Git server with write access"
-                        } }) { Text("Generate SSH key") }
-                    } else {
-                        Text("SSH public key", style = MaterialTheme.typography.titleSmall)
-                        SelectionContainer { Text(publicKey, style = MaterialTheme.typography.bodySmall) }
-                        TextButton(onClick = {
-                            getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("SynchroGit SSH public key", publicKey))
-                        }) { Text("Copy public key") }
-                    }
-                    Text("Add this public key in GitHub repository Settings → Deploy keys → Allow write access. The private key stays encrypted on this device. Uninstalling deletes it.", style = MaterialTheme.typography.bodySmall)
-                    Field("SSH server fingerprint (blank for GitHub)", auth.optString("host_fingerprint"), enabled) { authChange("host_fingerprint", it) }
-                    Text("GitHub server keys are verified automatically. For another server, enter its SHA256:… fingerprint from a trusted source.", style = MaterialTheme.typography.bodySmall)
+                if (transport == "ssh") {
+                    Text("git@github.com:owner/repository.git or git@gitlab.com:group/repository.git", style = MaterialTheme.typography.bodySmall)
+                    val defaultKey = sshKeys.firstOrNull { it.id == gitDefaults.optString("ssh_key_id") }
+                    ChoiceField("SSH key", auth.optString("ssh_key_id"),
+                        listOf("" to "Use Git default (${defaultKey?.name ?: "not selected"})") + sshKeys.map { it.id to it.name }, enabled) { authChange("ssh_key_id", it) }
+                    OutlinedButton(onClick = onManageKeys) { Text("Manage SSH keys") }
+                    Text("A key can be shared by repositories. The Git server decides which repositories it can access.", style = MaterialTheme.typography.bodySmall)
+                    Field("SSH server fingerprint (blank for GitHub or GitLab.com)", auth.optString("host_fingerprint"), enabled) { authChange("host_fingerprint", it) }
+                    Text("GitHub and GitLab.com server keys are verified automatically. For a self-managed server, enter its SHA256 fingerprint from a trusted source.", style = MaterialTheme.typography.bodySmall)
                 } else {
                     Field("HTTPS username", auth.optString("username", "git"), enabled) { authChange("username", it) }
                     Field("Access token (blank for public repositories)", auth.optString("password"), enabled, secret = true) { authChange("password", it) }
                 }
-                Field("Commit author name", auth.optString("name"), enabled) { authChange("name", it) }
-                Field("Commit author email", auth.optString("email"), enabled) { authChange("email", it) }
+                var authorOverride by remember(path) { mutableStateOf(auth.optString("name").isNotBlank() || auth.optString("email").isNotBlank()) }
+                TextButton(onClick = { authorOverride = !authorOverride }) { Text(if (authorOverride) "Hide author overrides" else "Author overrides") }
+                if (authorOverride) {
+                    Field("Commit author name (blank: Git default)", auth.optString("name"), enabled) { authChange("name", it) }
+                    Field("Commit author email (blank: Git default)", auth.optString("email"), enabled) { authChange("email", it) }
+                }
                 fun prepare(): String {
                     val absolute = File(path).also { require(it.isAbsolute) { "Folder path must be absolute" } }.canonicalPath
                     require(absolute == path) { "Use the canonical folder path: $absolute" }
                     val url = auth.optString("url")
+                    saveGitDefaults()
                     store.saveAuth(path, auth)
                     store.applyConnection(path, auth)
                     return url
@@ -262,12 +294,14 @@ class MainActivity : ComponentActivity() {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(enabled = enabled && path.isNotBlank(), onClick = { perform {
                         prepare()
-                        NativeBridge.request("identity", JSONObject().put("path", path).put("name", auth.optString("name")).put("email", auth.optString("email")).put("remote", repo.optString("remote", "origin")).put("url", auth.optString("url")))
+                        val identity = store.resolvedAuth(auth)
+                        NativeBridge.request("identity", JSONObject().put("path", path).put("name", identity.optString("name")).put("email", identity.optString("email")).put("remote", repo.optString("remote", "origin")).put("url", auth.optString("url")))
                         store.message = "Connection and author saved"
                     } }) { Text("Use existing") }
                     Button(enabled = enabled && path.isNotBlank(), onClick = { perform {
                         val url = prepare()
-                        NativeBridge.request("clone", JSONObject().put("path", path).put("url", url).put("name", auth.optString("name")).put("email", auth.optString("email")))
+                        val identity = store.resolvedAuth(auth)
+                        NativeBridge.request("clone", JSONObject().put("path", path).put("url", url).put("name", identity.optString("name")).put("email", identity.optString("email")))
                         store.message = "Repository cloned; save settings to begin synchronization"
                     } }) { Text("Clone") }
                 }
@@ -275,12 +309,4 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-}
-
-@Composable private fun Field(label: String, value: String, enabled: Boolean, secret: Boolean = false, multiline: Boolean = false, onChange: (String) -> Unit) {
-    OutlinedTextField(value, onChange, modifier = Modifier.fillMaxWidth(), label = { Text(label) }, enabled = enabled,
-        singleLine = !multiline, visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None)
-}
-@Composable private fun Toggle(label: String, value: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label, modifier = Modifier.weight(1f)); Switch(value, onChange, enabled = enabled) }
 }

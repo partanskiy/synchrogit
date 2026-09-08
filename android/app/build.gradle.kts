@@ -10,8 +10,8 @@ android {
         applicationId = "dev.synchrogit.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = providers.environmentVariable("ANDROID_VERSION_CODE").orElse("26090101").get().toInt()
-        versionName = providers.environmentVariable("SYNCHROGIT_VERSION").orElse("26.9.1-dev").get()
+        versionCode = providers.environmentVariable("ANDROID_VERSION_CODE").orElse("26090201").get().toInt()
+        versionName = providers.environmentVariable("SYNCHROGIT_VERSION").orElse("26.9.2-dev").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
