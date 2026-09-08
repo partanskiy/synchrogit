@@ -88,7 +88,6 @@ class MainActivity : ComponentActivity() {
                 store.message = "Configuration imported; review paths and save"
             }
         }
-        val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
         val storage = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
         LaunchedEffect(Unit) {
             while (isActive) {
@@ -134,7 +133,6 @@ class MainActivity : ComponentActivity() {
                     Button(enabled = !busy && repos.length() > 0, onClick = {
                         if (running) { stopService(Intent(this@MainActivity, SyncService::class.java)); store.message = "Stopping synchronization…" }
                         else {
-                            if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
                             perform {
                                 persist()
                                 withContext(Dispatchers.Main) { startForegroundService(Intent(this@MainActivity, SyncService::class.java)) }
@@ -172,6 +170,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Text("Continuous mode watches local edits and uses the interval below. Android may suspend it during sleep and limits background data-sync services on Android 15+ to 6 hours per day. Scheduled mode does not watch edits immediately.", style = MaterialTheme.typography.bodySmall)
+                if (Build.VERSION.SDK_INT < 33) {
+                    Text("To hide the continuous-sync notification, turn off SynchroGit notifications in Android settings. Synchronization will continue.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = {
+                        startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                    }) { Text("Android notification settings") }
+                }
             }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
