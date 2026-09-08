@@ -21,11 +21,16 @@ Verified through the real GitHub remote:
 - A remote deletion kept the original absent on both devices and preserved the
   phone's edits only in a conflict copy. Neither repository had an unfinished merge.
 
-The Android SSH development build additionally passed all eight instrumentation
+An in-place update to a locally signed v26.9.1 APK retained the repository,
+configuration and encrypted HTTPS token. After starting synchronization again,
+the same two-way GitHub checks passed without re-entering credentials.
+
+The Android SSH development build additionally passed all nine instrumentation
 tests on the same phone. These cover private/shared storage, real Git cycles,
 watcher events, foreground-service start/stop, Android TLS trust, encrypted
 credentials, SSH key generation/reuse, SSH clone/fetch/push, rejection of an
-incorrect SSH host fingerprint, and Compose connection drafts across scrolling.
+incorrect SSH host fingerprint, Compose connection drafts across scrolling, and
+correct service status after an activity/process restart.
 SSH transport tests use a disposable loopback server, not a production account.
 
 Long unattended operation, deep Doze, Samsung battery restrictions, reboot and
