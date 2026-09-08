@@ -73,8 +73,10 @@ The UI follows the system theme and colors. **Git defaults** shares a commit
 author and SSH key across repositories; GitHub and GitLab.com server keys are
 verified automatically.
 
-Continuous sync watches local edits and checks remotes on the timer, using a
-visible notification. Android can suspend background execution and, on Android
+Continuous sync watches local edits and checks remotes on the timer. On Android
+13+, it runs without notifications in the drawer; Android's active-apps indicator
+remains. On Android 8–12, its silent service notification can be hidden in system
+settings. Android can suspend background execution and, on Android
 15+, limits background dataSync services to six hours per day. Optional scheduled
 checks run every 15 minutes or later. See the [Android guide](android/README.md)
 for folder access, credentials, background behavior and building the app.

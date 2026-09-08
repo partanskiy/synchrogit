@@ -1,5 +1,6 @@
 package dev.synchrogit.app
 
+import android.app.NotificationManager
 import android.content.Intent
 import android.os.Build
 import android.os.Environment
@@ -94,6 +95,10 @@ class NativeSyncTest {
                     Thread.sleep(100)
                 }
                 assertTrue("foreground service should start the Rust engine", call("status").getBoolean("running"))
+                if (Build.VERSION.SDK_INT >= 33) {
+                    assertFalse("continuous sync must work with drawer notifications disabled",
+                        context.getSystemService(NotificationManager::class.java).areNotificationsEnabled())
+                }
                 Thread.sleep(500)
                 File(a, "watched.md").writeText("filesystem event\n")
                 var observed = false

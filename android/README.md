@@ -14,11 +14,16 @@ The universal APK contains ARM64 and x86_64 libraries with 16 KiB ELF alignment.
    A repository can override the shared author or select another SSH key.
 3. Choose **Clone** for a new empty destination, or **Use existing** for a Git
    working tree already present on the phone. Save settings.
-4. Start continuous sync. The notification provides a Stop action. The app shows
+4. Start continuous sync; use **Stop** in the app to stop it. The app shows
    per-repository results and failures. Local edits use the Rust filesystem
    watcher; remote updates use the configured timer.
 
-Continuous mode uses a visible dataSync foreground service. Android 15+ limits
+Continuous mode uses a dataSync foreground service. On Android 13+, the app does
+not request notification permission and does not show notifications in the drawer.
+Android can still list it in **Active apps** while the service runs. On Android
+8–12, the required service notification is silent; use **Android notification
+settings** under **Background checks** to hide it without stopping synchronization.
+Android 15+ limits
 background runtime of this service type to six hours per 24 hours. Doze and
 vendor battery management can delay execution even while the service exists.
 The app stops the service on timeout and explains why. It does not silently
@@ -125,7 +130,8 @@ python3 scripts/android-ssh-fixture.py --stop
 The fixture contains only disposable local test repositories. Instrumentation
 covers the Kotlin/JNI/Rust boundary, actual Git commit/fetch/merge/push, binary
 files, conflict copies, remote deletions, filesystem watching in private and
-shared storage, foreground-service start/stop, Android Keystore,
+shared storage, foreground-service start/stop without notification permission on
+Android 13+, Android Keystore,
 HTTPS certificate validation through a public clone, and loading the Compose UI.
 It also checks real SSH clone/fetch/push, rejection of an incorrect server key,
 encrypted shared SSH keys, migration of legacy keys, reusable author defaults,

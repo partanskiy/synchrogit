@@ -15,15 +15,24 @@ class SyncService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onCreate() {
         super.onCreate()
-        getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel("sync", "Synchronization", NotificationManager.IMPORTANCE_LOW))
+        getSystemService(NotificationManager::class.java).createNotificationChannel(
+            NotificationChannel("sync", "Synchronization", NotificationManager.IMPORTANCE_LOW).apply {
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            })
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "stop") { stopSelf(); return START_NOT_STICKY }
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val stop = PendingIntent.getService(this, 1, Intent(this, SyncService::class.java).setAction("stop"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        // Android requires this even without POST_NOTIFICATIONS. On Android 13+
+        // it is kept out of the notification drawer; the system's active-apps
+        // indicator remains. Older versions let users hide the channel in settings.
         startForeground(1, Notification.Builder(this, "sync").setContentTitle("SynchroGit")
             .setContentText("Watching local files and checking remotes").setSmallIcon(dev.synchrogit.app.R.drawable.ic_sync)
-            .setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null, "Stop", stop).build()).build())
+            .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_SERVICE)
+            .addAction(Notification.Action.Builder(null, "Stop", stop).build()).build())
         if (!started) {
             started = true
             scope.launch {
