@@ -1,5 +1,6 @@
 //! In-process Git implementation. Never retries an external Git failure with
 //! another backend; repository policy is shared with the command-line backend.
+use super::auth::Authentication;
 use super::{cmd::GitOutput, operation::Operation};
 use crate::error::{Result, SynchrogitError};
 use git2::{
@@ -18,8 +19,7 @@ type GitResult<T> = std::result::Result<T, Error>;
 #[derive(Clone)]
 pub struct Credentials {
     pub url: String,
-    pub username: String,
-    pub password: String,
+    pub authentication: Authentication,
 }
 static CREDENTIALS: OnceLock<RwLock<BTreeMap<PathBuf, Credentials>>> = OnceLock::new();
 pub fn set_credentials(path: PathBuf, credentials: Option<Credentials>) {
@@ -49,7 +49,7 @@ pub(crate) fn execute(path: &Path, operation: Operation, timeout: Duration) -> R
         Err(error) => Err(SynchrogitError::GitFailed {
             args,
             code: 1,
-            stderr: error.message().into(),
+            stderr: describe_error(&error),
         }),
     }
 }
@@ -351,6 +351,22 @@ fn callbacks_for(
         .cloned();
     let mut attempts = 0;
     let mut callbacks = RemoteCallbacks::new();
+    if let Some(Credentials {
+        authentication: authentication @ Authentication::Ssh { .. },
+        ..
+    }) = credentials.clone()
+    {
+        callbacks.certificate_check(move |certificate, host| {
+            let digest = certificate
+                .as_hostkey()
+                .and_then(|key| key.hash_sha256())
+                .ok_or_else(|| {
+                    Error::from_str("The SSH server did not provide a SHA256 host key")
+                })?;
+            authentication.check_host(host, digest)?;
+            Ok(git2::CertificateCheckStatus::CertificateOk)
+        });
+    }
     callbacks.credentials(move |url, username, allowed| {
         attempts += 1;
         if Instant::now() >= deadline || attempts > 3 {
@@ -362,9 +378,7 @@ fn callbacks_for(
                     "refusing to send credentials to a different URL",
                 ));
             }
-            if allowed.contains(CredentialType::USER_PASS_PLAINTEXT) {
-                return Cred::userpass_plaintext(&credentials.username, &credentials.password);
-            }
+            return credentials.authentication.credential(allowed);
         }
         if allowed.contains(CredentialType::SSH_KEY) {
             return Cred::ssh_key_from_agent(username.unwrap_or("git"));
@@ -407,5 +421,16 @@ pub fn clone_repository(
         config.set_str("user.email", email)?;
         Ok(())
     })();
-    result.map_err(|e| SynchrogitError::Other(e.to_string()))
+    result.map_err(|e| SynchrogitError::Other(describe_error(&e)))
+}
+
+fn describe_error(error: &Error) -> String {
+    // libgit2 replaces the certificate callback's message with this generic
+    // error. Give mobile users an actionable explanation without suggesting
+    // that an unexpected key should be trusted automatically.
+    if error.message() == "invalid or unknown remote ssh hostkey" {
+        "SSH server key is unknown or does not match the trusted fingerprint; verify it with the server administrator (desktop: check known_hosts)".into()
+    } else {
+        error.message().into()
+    }
 }

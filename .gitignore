@@ -10,4 +10,5 @@
 *.jks
 *.keystore
 /android/app/src/androidTest/assets/sync-fixture.zip
+/android/app/src/androidTest/assets/ssh-fixture.json
 /android/app/src/main/assets/THIRD_PARTY_LICENSES.html

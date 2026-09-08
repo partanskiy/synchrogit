@@ -29,6 +29,12 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android tools
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'ndk;28.2.13676358'
+      - name: Start disposable SSH Git server
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openssh-server
+          sudo mkdir -p /run/sshd
+          python3 scripts/android-ssh-fixture.py
       - name: Build native libraries and test fixtures
         run: |
           scripts/build-android.sh
@@ -53,7 +59,11 @@ jobs:
           script: |
             android/gradlew -p android installDebug --console=plain
             adb shell appops set --uid dev.synchrogit.app.debug MANAGE_EXTERNAL_STORAGE allow
+            adb reverse tcp:22229 tcp:22229
             android/gradlew -p android connectedDebugAndroidTest --console=plain
+      - name: Stop disposable SSH Git server
+        if: always()
+        run: python3 scripts/android-ssh-fixture.py --stop
       - uses: actions/upload-artifact@v4
         if: always()
         with:

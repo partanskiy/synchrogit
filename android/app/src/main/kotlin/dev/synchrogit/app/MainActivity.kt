@@ -15,9 +15,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -26,7 +28,6 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.net.URI
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,6 +38,9 @@ class MainActivity : ComponentActivity() {
 
     @Composable private fun SettingsScreen() {
         val store = remember { SettingsStore(this) }
+        // Keep connection drafts while a repository card scrolls out of the
+        // LazyColumn. Credentials are persisted only by explicit actions.
+        val connectionDrafts = remember { mutableStateMapOf<String, JSONObject>() }
         var settings by remember { mutableStateOf(runCatching { store.read() }.getOrElse {
             store.message = it.message ?: "Cannot read configuration"
             JSONObject().put("defaults", JSONObject()).put("repo", JSONArray())
@@ -94,7 +98,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         val repos = settings.optJSONArray("repo") ?: JSONArray()
-        LazyColumn(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(Modifier.testTag("settings-list").fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 Spacer(Modifier.height(12.dp))
                 Text("SynchroGit", style = MaterialTheme.typography.headlineLarge)
@@ -168,7 +172,7 @@ class MainActivity : ComponentActivity() {
             }
             items((0 until repos.length()).toList()) { index ->
                 val repo = repos.getJSONObject(index)
-                RepositoryEditor(repo, store, !busy && !running && !periodic,
+                RepositoryEditor(repo, store, connectionDrafts, !busy && !running && !periodic,
                     onChange = { replacement -> update { it.getJSONArray("repo").put(index, replacement) } },
                     onRemove = { update { it.getJSONArray("repo").remove(index) } },
                     perform = { action -> perform(action) })
@@ -189,11 +193,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @Composable private fun RepositoryEditor(repo: JSONObject, store: SettingsStore, enabled: Boolean, onChange: (JSONObject) -> Unit, onRemove: () -> Unit, perform: (suspend () -> Unit) -> Unit) {
+    @Composable private fun RepositoryEditor(repo: JSONObject, store: SettingsStore, drafts: MutableMap<String, JSONObject>, enabled: Boolean, onChange: (JSONObject) -> Unit, onRemove: () -> Unit, perform: (suspend () -> Unit) -> Unit) {
         fun change(key: String, value: String) = onChange(JSONObject(repo.toString()).also { if (value.isBlank() && key !in listOf("name", "path")) it.remove(key) else it.put(key, value) })
         val path = repo.optString("path")
-        var auth by remember(path) { mutableStateOf(runCatching { store.auth(path) }.getOrDefault(JSONObject())) }
-        fun authChange(key: String, value: String) { auth = JSONObject(auth.toString()).put(key, value) }
+        val auth = drafts[path] ?: remember(path) { runCatching { store.auth(path) }.getOrDefault(JSONObject()) }
+        fun authChange(key: String, value: String) { drafts[path] = JSONObject(auth.toString()).put(key, value) }
+        var publicKey by remember(path) { mutableStateOf(runCatching { store.sshPublicKey(path) }.getOrDefault("")) }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(repo.optString("name", "Repository"), style = MaterialTheme.typography.titleLarge)
@@ -215,21 +220,39 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Text("Connection and commit author", style = MaterialTheme.typography.titleMedium)
-                Field("HTTPS repository URL", auth.optString("url"), enabled) { authChange("url", it) }
-                Field("HTTPS username", auth.optString("username", "git"), enabled) { authChange("username", it) }
-                Field("Access token (blank for public repositories)", auth.optString("password"), enabled, secret = true) { authChange("password", it) }
+                Field("Repository URL (HTTPS or SSH)", auth.optString("url"), enabled) { authChange("url", it) }
+                val ssh = auth.optString("url").let { it.isNotBlank() && !it.startsWith("https://") }
+                if (ssh) {
+                    Text("For example: git@github.com:owner/repository.git", style = MaterialTheme.typography.bodySmall)
+                    if (publicKey.isEmpty()) {
+                        OutlinedButton(enabled = enabled && path.isNotBlank(), onClick = { perform {
+                            val generated = store.generateSshKey(path)
+                            store.saveAuth(path, auth)
+                            withContext(Dispatchers.Main) { publicKey = generated }
+                            store.message = "SSH key created; add the public key to your Git server with write access"
+                        } }) { Text("Generate SSH key") }
+                    } else {
+                        Text("SSH public key", style = MaterialTheme.typography.titleSmall)
+                        SelectionContainer { Text(publicKey, style = MaterialTheme.typography.bodySmall) }
+                        TextButton(onClick = {
+                            getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("SynchroGit SSH public key", publicKey))
+                        }) { Text("Copy public key") }
+                    }
+                    Text("Add this public key in GitHub repository Settings → Deploy keys → Allow write access. The private key stays encrypted on this device. Uninstalling deletes it.", style = MaterialTheme.typography.bodySmall)
+                    Field("SSH server fingerprint (blank for GitHub)", auth.optString("host_fingerprint"), enabled) { authChange("host_fingerprint", it) }
+                    Text("GitHub server keys are verified automatically. For another server, enter its SHA256:… fingerprint from a trusted source.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Field("HTTPS username", auth.optString("username", "git"), enabled) { authChange("username", it) }
+                    Field("Access token (blank for public repositories)", auth.optString("password"), enabled, secret = true) { authChange("password", it) }
+                }
                 Field("Commit author name", auth.optString("name"), enabled) { authChange("name", it) }
                 Field("Commit author email", auth.optString("email"), enabled) { authChange("email", it) }
                 fun prepare(): String {
                     val absolute = File(path).also { require(it.isAbsolute) { "Folder path must be absolute" } }.canonicalPath
                     require(absolute == path) { "Use the canonical folder path: $absolute" }
                     val url = auth.optString("url")
-                    if (url.isNotBlank()) {
-                        val parsed = URI(url)
-                        require(parsed.scheme == "https" && !parsed.host.isNullOrBlank() && parsed.userInfo == null) { "Use an HTTPS URL without credentials in it" }
-                    }
                     store.saveAuth(path, auth)
-                    if (url.isNotBlank()) NativeBridge.request("credentials", JSONObject().put("path", path).put("url", url).put("username", auth.optString("username", "git")).put("password", auth.optString("password")))
+                    store.applyConnection(path, auth)
                     return url
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

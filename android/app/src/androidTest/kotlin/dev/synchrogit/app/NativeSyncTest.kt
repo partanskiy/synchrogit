@@ -142,4 +142,56 @@ class NativeSyncTest {
         assertFalse(stored.contains("test-secret"))
         assertFalse(store.auth("$path-other").has("password"))
     }
+
+    @Test fun sshKeysAreEncryptedAndReusedForTheSameRepository() {
+        val store = SettingsStore(context)
+        val path = File(context.filesDir, "ssh-key-test-${System.nanoTime()}").canonicalPath
+        val publicKey = store.generateSshKey(path)
+        assertTrue(publicKey.startsWith("ssh-ed25519 "))
+        assertEquals(publicKey, store.generateSshKey(path))
+        val prefs = context.getSharedPreferences("synchrogit", 0)
+        val encrypted = prefs.getString("ssh:$path", "")!!
+        assertFalse(encrypted.contains("PRIVATE KEY"))
+        assertFalse(encrypted.contains(publicKey))
+        assertEquals("", store.sshPublicKey("$path-other"))
+        prefs.edit().putString("ssh:$path-other", encrypted).commit()
+        assertTrue(runCatching { store.sshPublicKey("$path-other") }.isFailure)
+        prefs.edit().remove("ssh:$path").remove("ssh:$path-other").commit()
+    }
+
+    @Test fun sshCloneFetchPushAndHostKeyVerification() {
+        val assets = InstrumentationRegistry.getInstrumentation().context.assets
+        val fixture = JSONObject(assets.open("ssh-fixture.json").bufferedReader().use { it.readText() })
+        val root = File(Environment.getExternalStorageDirectory(), "synchrogit-ssh-test-${System.nanoTime()}").canonicalFile
+        fun credentials(path: File, fingerprint: String = fixture.getString("host_fingerprint")) {
+            call("ssh_credentials", JSONObject().put("path", path.path).put("url", fixture.getString("url"))
+                .put("private_key", fixture.getString("private_key")).put("host_fingerprint", fingerprint))
+        }
+        fun clone(path: File) = call("clone", JSONObject().put("path", path.path).put("url", fixture.getString("url"))
+            .put("name", "SSH Android Test").put("email", "test@example.com"))
+        fun cycle(path: File) {
+            val settings = JSONObject().put("repo", JSONArray().put(JSONObject().put("path", path.path)))
+            val config = File(root, "${path.name}.toml")
+            config.writeText(call("encode_config", JSONObject().put("settings", settings)).getString("config"))
+            call("once", JSONObject().put("path", config.path))
+        }
+        try {
+            val rejected = File(root, "rejected")
+            credentials(rejected, "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            val failure = runCatching { clone(rejected) }.exceptionOrNull()
+            assertNotNull("An untrusted SSH host must be rejected", failure)
+            assertTrue("Expected a host-key error, received ${failure?.message}", failure!!.message!!.contains("SSH server key"))
+            val a = File(root, "a"); val b = File(root, "b")
+            credentials(a); clone(a)
+            credentials(b); clone(b)
+            val marker = "SSH from Android ${System.nanoTime()}\n"
+            File(a, "android.md").writeText(marker)
+            cycle(a); cycle(b)
+            assertEquals(marker, File(b, "android.md").readText())
+            File(b, "reply.md").writeText("SSH reply\n")
+            cycle(b); cycle(a)
+            assertEquals("SSH reply\n", File(a, "reply.md").readText())
+            assertFalse(File(a, ".git/config").readText().contains("PRIVATE KEY"))
+        } finally { root.deleteRecursively() }
+    }
 }

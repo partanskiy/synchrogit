@@ -1,6 +1,6 @@
 [package]
 name = "synchrogit"
-version = "26.9.0"
+version = "26.9.1"
 edition = "2024"
 rust-version = "1.94"
 description = "Daemon that keeps git repositories synced with their remotes"
@@ -43,13 +43,17 @@ notify = "8.0"
 humantime = "2.1"
 shellexpand = "3.1"
 git2 = { version = "0.21", features = ["https", "ssh", "vendored-libgit2", "vendored-openssl"], optional = true }
+ssh-key = { version = "0.6.7", default-features = false, features = ["std", "ed25519", "getrandom"], optional = true }
+url = { version = "2.5", optional = true }
+base64 = { version = "0.22", optional = true }
+zeroize = { version = "1.8", optional = true }
 
 [dev-dependencies]
 tempfile = "3.13"
 
 [features]
 default = ["embedded-git"]
-embedded-git = ["dep:git2"]
+embedded-git = ["dep:git2", "dep:ssh-key", "dep:url", "dep:base64", "dep:zeroize"]
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

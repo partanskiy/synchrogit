@@ -13,4 +13,14 @@ class SettingsUiTest {
         compose.onNodeWithText("Folder access").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Pull interval").performScrollTo().assertExists()
     }
+    @Test fun connectionDraftSurvivesScrollingAwayFromItsRepository() {
+        val url = "git@github.com:owner/repository.git"
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("Repository URL (HTTPS or SSH)"))
+        compose.onNodeWithText("Repository URL (HTTPS or SSH)").performScrollTo().performTextReplacement(url)
+        compose.onNodeWithText("Generate SSH key").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("SynchroGit"))
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("Repository URL (HTTPS or SSH)"))
+        compose.onNodeWithText("Repository URL (HTTPS or SSH)").performScrollTo()
+        compose.onNodeWithText(url).assertExists()
+    }
 }
