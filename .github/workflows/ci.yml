@@ -14,6 +14,13 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  release-automation:
+    name: release automation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/test_publish_copr.py
+
   fmt:
     name: rustfmt
     runs-on: ubuntu-24.04

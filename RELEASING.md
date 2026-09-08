@@ -69,6 +69,20 @@ The Linux build jobs also produce `.deb` and `.rpm` packages (via `cargo-deb` an
 - `Update APT repo` downloads the release `.deb`s, regenerates the flat signed repo, and pushes it to [`partanskiy/apt-repo`](https://github.com/partanskiy/apt-repo) (served via GitHub Pages). Needs the `APT_SSH_PRIVATE_KEY` (deploy key) and `APT_GPG_PRIVATE_KEY` (repo signing key) secrets.
 - COPR builds itself, with no credentials in this repository: the [`partanskiy/synchrogit`](https://copr.fedorainfracloud.org/coprs/partanskiy/synchrogit/) COPR project uses a *custom source method* — a script stored in the project settings that resolves the latest GitHub release, downloads its tarball, and renders `packaging/copr/synchrogit.spec.in` **from `main`** (so packaging fixes do not require a re-tag). A GitHub release-event webhook on this repository targets COPR’s **custom** webhook endpoint with the package name `synchrogit`, so rebuilding happens after release publication. The GitHub-specific COPR webhook handler is for SCM packages and does not rebuild this custom-source package. Nothing expires; re-trigger manually with `copr-cli build-package synchrogit --name synchrogit` if ever needed.
 
+The direct COPR release webhook also reacts to release asset/notes edits and can
+start many identical builds. To switch to one request after a completed release:
+
+1. With the repository owner's approval, place the existing package-specific
+   custom webhook URL in the `COPR_WEBHOOK_URL` Actions secret. The URL itself
+   authorizes builds; do not put it in source code or logs.
+2. Disable the old GitHub release webhook before enabling this workflow on main.
+3. Use **Update COPR** to request the latest stable release once. Subsequent
+   successful Release workflow completions trigger it automatically. Old releases,
+   failed workflows and forks are skipped. Release edits do not trigger it.
+
+If a request times out, check COPR before rerunning: it may already have queued
+the build. The workflow deliberately does not retry POST requests automatically.
+
 The APT workflow supports the same manual `workflow_dispatch` fallback as the AUR and Homebrew publishers. Nix needs no publishing at all — the flake in the repo builds from the tagged source.
 
 ## Homebrew
