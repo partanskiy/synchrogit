@@ -40,6 +40,12 @@ class SettingsUiTest {
     @Test fun staleServiceMessageDoesNotClaimAStoppedEngineIsRunning() {
         SettingsStore(compose.activity).message = "Continuous synchronization is running"
         compose.activityRule.scenario.recreate()
+        // The native status poll runs off the Compose thread. Initial composition
+        // can still contain the saved message before that first poll completes.
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodesWithText("Synchronization is stopped; press Start to resume")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("Continuous sync is stopped").assertIsDisplayed()
         compose.onNodeWithText("Continuous synchronization is running").assertDoesNotExist()
         compose.onNodeWithText("Synchronization is stopped; press Start to resume").assertIsDisplayed()
