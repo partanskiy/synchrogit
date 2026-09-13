@@ -21,18 +21,33 @@ The universal APK contains ARM64 and x86_64 libraries with 16 KiB ELF alignment.
 Continuous mode uses a dataSync foreground service. On Android 13+, the app does
 not request notification permission and does not show notifications in the drawer.
 Android can still list it in **Active apps** while the service runs. On Android
-8–12, the required service notification is silent; use **Android notification
+8-12, the required service notification is silent; use **Android notification
 settings** under **Background checks** to hide it without stopping synchronization.
-Android 15+ limits
-background runtime of this service type to six hours per 24 hours. Doze and
-vendor battery management can delay execution even while the service exists.
-The app stops the service on timeout and explains why. It does not silently
-claim to keep running. Reopen the app to restart it.
+Android 15+ limits background runtime of this service type to six hours per
+24 hours; bringing the app to the foreground resets that budget. Starting
+continuous sync also registers automatic WorkManager fallback checks. After
+a timeout the service stops gracefully and the fallback remains scheduled,
+with a minimum interval of 15 minutes. Android may delay checks further; they
+do not provide immediate file watching. Opening the app automatically resumes
+continuous synchronization if you previously started it.
 
-Optional **Scheduled sync** uses WorkManager (minimum interval 15 minutes,
-execution can be later). It can continue after the continuous service stops and
-survives process death/reboot, but it does not provide immediate file watching.
-Android's Force stop disables background work until the app is opened again.
+The service asks Android to restore it after process death. Its saved user intent
+prevents a queued restart from undoing an explicit **Stop**. Stop also cancels
+automatic fallback. The separate **Scheduled sync** switch keeps periodic checks
+enabled independently, including after Stop. Scheduled work survives process
+death and reboot; continuous dataSync services cannot start from a boot receiver
+on Android 15+. Android's Force stop prevents background work until the app is
+opened again. An upgrade from an older release requires pressing Start once to
+enable the new recovery behavior.
+
+**Background checks** shows the last service interruption or Android process-exit
+reason and time, plus the current battery restrictions. **Battery settings** opens
+the app's Android settings, where you can allow background battery use. Doze and
+vendor battery management can delay work even while a service exists. Exemption
+from battery optimization does not remove the dataSync time limit. The app does
+not automatically change these settings, keep the CPU awake continuously, or
+claim that a paused service is running. Diagnostic history stores only a reason
+and time, without credentials, repository contents or process traces.
 
 The app follows the system light/dark theme and uses the system's dynamic colors
 on Android 12 and later. Earlier versions use matching Material light/dark colors.
@@ -54,7 +69,7 @@ TLS uses Android's trusted CA certificates. Do not put a token into a URL.
 
 ### SSH authentication
 
-Open **Git defaults → Manage SSH keys**, give a key a recognizable name, and
+Open **Git defaults -> Manage SSH keys**, give a key a recognizable name, and
 choose **Generate SSH key**. The Rust core generates an Ed25519 key using the
 operating system's random source. The key belongs to the app and can be selected
 for multiple repositories; generating another named key creates a distinct key.
@@ -142,7 +157,20 @@ disposable key, and restricts commands to its temporary Git repository; it does
 not use the developer's SSH keys. Remove `target/android-ssh-fixture` before
 starting a new fixture after stopping the previous server.
 GitHub Actions builds the APK and runs these checks on an Android emulator.
-The all-files test permission above applies to Android 11+; on Android 8–10,
+The emulator uses Android 16 and additionally runs:
+
+```sh
+python3 scripts/android-background-test.py
+```
+
+This test kills only the debug process and verifies that Android restores the
+service and filesystem synchronization. It then shortens the emulator's dataSync
+time limit, verifies graceful timeout and an actual scheduled Git cycle, and
+checks automatic resume, explicit Stop and hidden drawer notifications. The
+original system timeout is restored in `finally`. The timeout test refuses
+physical devices because that setting affects all dataSync services. To test
+only debug-process recovery on a phone, use `--process-only` instead.
+The all-files test permission above applies to Android 11+; on Android 8-10,
 grant the debug app's storage permission instead.
 
 Release builds use ANDROID_KEYSTORE_PATH and ANDROID_KEYSTORE_PASSWORD (alias

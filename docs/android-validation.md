@@ -14,7 +14,7 @@ Verified through the real GitHub remote:
 - Automatic Linux file edits arrived on Android without pressing Sync now.
 - Android file edits arrived on Linux automatically.
 - Both directions also converged with the app on the home-screen background
-  and with the display off (about 26–27 seconds in the combined checks, USB connected).
+  and with the display off (about 26-27 seconds in the combined checks, USB connected).
 - Binary contents and Unicode filenames/text were preserved byte for byte.
 - Simultaneous edits kept the remote original and synchronized a copy of the
   phone's local edits back to Linux.
@@ -36,8 +36,8 @@ in the app's encrypted storage. The existing clone's origin was changed to SSH
 through **Use existing**, and GitHub's built-in host-key verification was used.
 The released APK then passed these real GitHub SSH checks:
 
-- Linux watcher → GitHub → Android timer: about 9 seconds.
-- Android watcher → GitHub → Linux timer: about 11 seconds.
+- Linux watcher -> GitHub -> Android timer: about 9 seconds.
+- Android watcher -> GitHub -> Linux timer: about 11 seconds.
 - Binary bytes and Unicode filenames/text survived unchanged.
 - After force-stopping and reopening the app, both directions worked again
   with the saved SSH key and the app in the home-screen background (about
@@ -63,9 +63,37 @@ SM-S936B / Android 16. New coverage verifies legacy-key migration without
 changing public key material, reuse of a shared key across repository paths,
 shared author defaults with local overrides, URL/authentication selection,
 inheritance of a disabled pull setting, system light/dark and dynamic color
-schemes, and whole-row switch interaction with a 1.8× font scale.
+schemes, and whole-row switch interaction with a 1.8x font scale.
 
 The physical device's system theme was dark. Visual inspection confirmed that
 the new settings screen uses the system dark palette and centers the scheduled
 sync switch with its label. No account key registration or change to the
 existing test deploy key's server permissions is part of this update.
+
+## Background recovery investigation, 2026-09-13
+
+The physical phone was running v26.9.3, with only the owner's Obsidian vault
+configured. At capture time its foreground service had been active for more than
+four hours. No periodic fallback job was registered. Android's historical exit
+records contained a low-memory termination of a cached process on September 9;
+this does not establish that Android killed an active foreground service. The
+original reported interruption was not present in the available log buffers.
+
+With the owner's permission, a unique diagnostic Markdown file was added to the
+real vault. Both installed v26.9.3 daemons were already running. The Linux edit
+arrived on Android in about 18 seconds, the Android reply arrived on Linux in
+16 seconds, and deletion propagated in 12 seconds. The test file was removed
+from both sides. Other notes and repository credentials were not modified.
+
+The recovery development build passed the instrumentation suite on the same
+Android 16 phone. A separate debug-app fixture then verified actual process
+death: Android recreated the sticky service, and the restored Rust watcher
+committed and pushed a new file without reopening the activity. Explicit Stop
+removed the service and its automatic scheduled work. The normal application
+and Obsidian vault were not used for this process-kill test.
+
+The accelerated dataSync timeout test runs only on an isolated Android 16
+emulator. Physical USB-connected checks do not prove unlimited background
+operation, immediate polling during deep sleep, or behavior under every Samsung
+battery policy. Android's six-hour service limit and delayed scheduled work
+remain platform constraints.

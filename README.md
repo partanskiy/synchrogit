@@ -7,7 +7,7 @@
 [![apt](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fpartanskiy.github.io%2Fapt-repo%2FPackages&search=Version%3A%20(%5CS%2B)&label=apt)](https://github.com/partanskiy/apt-repo)
 [![license](https://img.shields.io/github/license/partanskiy/synchrogit)](LICENSE)
 
-A small daemon that keeps a set of git repositories in sync with their remotes. Point it at a repo shared between machines — an Obsidian vault, a notes folder, a wiki — and stop thinking about commits, pulls, and pushes: every machine stays a plain git clone, and the full history stays yours.
+A small daemon that keeps a set of git repositories in sync with their remotes. Point it at a repo shared between machines - an Obsidian vault, a notes folder, a wiki - and stop thinking about commits, pulls, and pushes: every machine stays a plain git clone, and the full history stays yours.
 
 Works on **Linux, macOS and Windows**, with a **Kotlin + Compose Android app** for configuration and synchronization. The synchronization engine is shared Rust code.
 
@@ -16,8 +16,8 @@ Works on **Linux, macOS and Windows**, with a **Kotlin + Compose Android app** f
 Each configured repository gets an independent worker that runs the same cycle, triggered by filesystem events (debounced, so a burst of saves collapses into one commit) and by a periodic timer:
 
 1. **Commit** local changes with a timestamp message like `2026-07-22 17:41:03 (hostname)` (template configurable).
-2. **Fetch and merge** the remote. On a merge conflict: the remote version wins in place, and your version is saved alongside as `note.conflict-<host>-<timestamp>.md` — the marker sits before the extension, so the copy stays visible in extension-filtering tools like Obsidian. If the remote deleted a file you edited locally, the original stays deleted and your edits survive in the conflict copy.
-3. **Push**, but only when the remote is actually behind — an in-sync cycle touches the network once (fetch) and reports an honest `no-op`.
+2. **Fetch and merge** the remote. On a merge conflict: the remote version wins in place, and your version is saved alongside as `note.conflict-<host>-<timestamp>.md` - the marker sits before the extension, so the copy stays visible in extension-filtering tools like Obsidian. If the remote deleted a file you edited locally, the original stays deleted and your edits survive in the conflict copy.
+3. **Push**, but only when the remote is actually behind - an in-sync cycle touches the network once (fetch) and reports an honest `no-op`.
 
 Around the cycle:
 
@@ -75,10 +75,12 @@ verified automatically.
 
 Continuous sync watches local edits and checks remotes on the timer. On Android
 13+, it runs without notifications in the drawer; Android's active-apps indicator
-remains. On Android 8–12, its silent service notification can be hidden in system
-settings. Android can suspend background execution and, on Android
-15+, limits background dataSync services to six hours per day. Optional scheduled
-checks run every 15 minutes or later. See the [Android guide](android/README.md)
+remains. On Android 8-12, its silent service notification can be hidden in system
+settings. Android can suspend background execution and, on Android 15+, limits
+background dataSync services to six hours per day. Starting continuous sync also
+enables scheduled fallback checks every 15 minutes or later. Android can restart
+the service after process death; opening the app resumes it after a timeout.
+The app shows the last interruption and battery restrictions. See the [Android guide](android/README.md)
 for folder access, credentials, background behavior and building the app.
 
 ### Debian / Ubuntu
@@ -128,7 +130,7 @@ branch = "main"
 remote = "origin"
 ```
 
-Start the daemon — on Linux via the packaged systemd user unit, on macOS via `brew services`:
+Start the daemon - on Linux via the packaged systemd user unit, on macOS via `brew services`:
 
 ```sh
 systemctl --user enable --now synchrogit   # Linux
@@ -179,7 +181,7 @@ path = "~/.local/share/agent-wiki"
 interval = "30s"            # per-repo override of the timer interval
 ```
 
-Repo names must be unique. Paths may use `~` and environment variables, but must be absolute after expansion. Commit templates can use `{ts}` and `{host}`. Editing the config while the daemon runs is fine — it reloads automatically and keeps the previous config when the new one fails to parse.
+Repo names must be unique. Paths may use `~` and environment variables, but must be absolute after expansion. Commit templates can use `{ts}` and `{host}`. Editing the config while the daemon runs is fine - it reloads automatically and keeps the previous config when the new one fails to parse.
 
 See [`docs/config.md`](docs/config.md) for the full reference and [`examples/config.toml`](examples/config.toml) for a complete example.
 
@@ -197,7 +199,7 @@ On Windows, control commands use a user-specific named pipe. On Unix, they find 
 
 ## Versioning
 
-Versions follow a niri-style calendar scheme — `YY.M.PATCH`, e.g. `26.7.5` — so version numbers signal freshness rather than SemVer compatibility. Breaking changes are called out in release notes.
+Versions follow a niri-style calendar scheme - `YY.M.PATCH`, e.g. `26.7.5` - so version numbers signal freshness rather than SemVer compatibility. Breaking changes are called out in release notes.
 
 ## Building
 
@@ -211,13 +213,13 @@ Requires Rust 1.94+ (edition 2024), a C compiler, make and Perl for vendored lib
 
 Everything a distribution channel needs lives in this repository, one directory per channel, rendered and published by CI on each release:
 
-- `packaging/aur/` — AUR `PKGBUILD` templates.
-- `packaging/brew/` — Homebrew formula template for [`partanskiy/homebrew-tap`](https://github.com/partanskiy/homebrew-tap).
-- `packaging/copr/` — RPM spec template for [COPR](https://copr.fedorainfracloud.org).
-- `packaging/systemd/` — the user service and the per-user system template.
-- `packaging/config.example.toml` — complete example config.
+- `packaging/aur/` - AUR `PKGBUILD` templates.
+- `packaging/brew/` - Homebrew formula template for [`partanskiy/homebrew-tap`](https://github.com/partanskiy/homebrew-tap).
+- `packaging/copr/` - RPM spec template for [COPR](https://copr.fedorainfracloud.org).
+- `packaging/systemd/` - the user service and the per-user system template.
+- `packaging/config.example.toml` - complete example config.
 - `.deb`/`.rpm` metadata lives in `Cargo.toml` (`package.metadata.deb` / `package.metadata.generate-rpm`); the [APT repo](https://github.com/partanskiy/apt-repo) is regenerated from release `.deb`s.
-- `flake.nix` — Nix builds straight from the repo; no publisher needed.
+- `flake.nix` - Nix builds straight from the repo; no publisher needed.
 
 See [`RELEASING.md`](RELEASING.md) for the release flow.
 

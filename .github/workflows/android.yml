@@ -54,7 +54,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 36
           arch: x86_64
           profile: pixel_6
           disable-animations: true
@@ -63,6 +63,7 @@ jobs:
             adb shell appops set --uid dev.synchrogit.app.debug MANAGE_EXTERNAL_STORAGE allow
             adb reverse tcp:22229 tcp:22229
             android/gradlew -p android connectedDebugAndroidTest --console=plain
+            python3 scripts/android-background-test.py
       - name: Stop disposable SSH Git server
         if: always()
         run: python3 scripts/android-ssh-fixture.py --directory "$RUNNER_TEMP/synchrogit-ssh-fixture" --stop
