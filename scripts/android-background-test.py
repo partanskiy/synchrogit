@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Exercise real Android process recovery and timeouts on a disposable emulator.
 
-The system timeout override affects every dataSync service, so this script
-refuses physical devices. It only writes the debug app's local Git fixture.
+System timeout and clock overrides affect the whole device, so the full test
+requires an emulator. It only writes the debug app's local Git fixture.
 """
 import argparse
 import json
@@ -102,6 +102,7 @@ args = parser.parse_args()
 assert args.process_only or shell("getprop", "ro.kernel.qemu") == "1", "Timeout tests require a disposable emulator"
 assert int(shell("getprop", "ro.build.version.sdk")) >= 35
 old_timeout = shell("device_config", "get", "activity_manager", TIMEOUT)
+clock_restore = None
 try:
     if not args.process_only:
         shell("device_config", "put", "activity_manager", TIMEOUT, "600000")
@@ -143,6 +144,14 @@ try:
     assert state["continuous"] == "true" and state["interruption"] == "timeout", state
     wait_for("Scheduled fallback remains registered after the timeout", lambda: bool(jobs()))
     before = edit("after-android-timeout")
+    # JobScheduler's -f bypasses platform constraints, but WorkManager also
+    # checks wall-clock time against its minimum periodic interval. Advance
+    # only this disposable emulator; dataSync accounting uses elapsed time.
+    clock_restore = (int(shell("date", "+%s")) * 1000, time.monotonic(),
+                     shell("settings", "get", "global", "auto_time"))
+    shell("settings", "put", "global", "auto_time", "0")
+    shell("cmd", "alarm", "set-time", str(clock_restore[0] + 16 * 60 * 1000))
+    assert int(shell("date", "+%s")) * 1000 >= clock_restore[0] + 15 * 60 * 1000
     job_id, namespace = jobs()[0]
     command = ["cmd", "jobscheduler", "run", "-f"]
     if namespace and namespace != "null":
@@ -165,6 +174,13 @@ try:
     results.append({"check": "resume respects user intent and keeps drawer notifications hidden", "passed": True})
     print(json.dumps(results, indent=2), flush=True)
 finally:
+    if clock_restore is not None:
+        original, elapsed, automatic = clock_restore
+        shell("cmd", "alarm", "set-time", str(original + int((time.monotonic() - elapsed) * 1000)))
+        if automatic == "null":
+            shell("settings", "delete", "global", "auto_time")
+        else:
+            shell("settings", "put", "global", "auto_time", automatic)
     if not args.process_only:
         if old_timeout == "null":
             shell("device_config", "delete", "activity_manager", TIMEOUT)
