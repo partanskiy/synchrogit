@@ -84,16 +84,15 @@ def converged(before):
 def jobs():
     dump = shell("dumpsys", "jobscheduler")
     found = []
-    for block in re.split(r"(?=^\s*JOB #)", dump, flags=re.M):
+    # Namespaced jobs use "JOB namespace:uid/id", without the usual "#".
+    for block in re.split(r"(?=^[ \t]*JOB )", dump, flags=re.M):
         first = block.lstrip().splitlines()[0] if block.strip() else ""
         if APP + "/androidx.work.impl.background.systemjob.SystemJobService" not in first:
             continue
         match = re.search(r"/(\d+):", first)
         assert match, "Unrecognized WorkManager job identifier: " + first
-        namespace = re.search(r"(?:Namespace|namespace)[=:]\s*([^\s]+)", block)
-        if namespace is None:
-            namespace = re.search(r"\{([^}]+)\}/\d+:", first)
-        found.append((match.group(1), namespace.group(1).strip('\"{},') if namespace else None))
+        namespace = re.match(r"JOB ([^:#\s]+):", first)
+        found.append((match.group(1), namespace.group(1) if namespace else None))
     return found
 
 
