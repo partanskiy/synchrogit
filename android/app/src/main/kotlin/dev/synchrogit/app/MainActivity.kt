@@ -1,11 +1,13 @@
 package dev.synchrogit.app
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -32,8 +34,14 @@ class MainActivity : ComponentActivity() {
         setContent { SynchroGitTheme { Surface(Modifier.fillMaxSize()) { SettingsScreen() } } }
     }
 
+    override fun onResume() {
+        super.onResume()
+        SyncService.resumeIfRequested(this)
+    }
+
     @Composable private fun SettingsScreen() {
         val store = remember { SettingsStore(this) }
+        val background = remember { BackgroundState(this) }
         // Keep connection drafts while a repository card scrolls out of the
         // LazyColumn. Credentials are persisted only by explicit actions.
         val connectionDrafts = remember { mutableStateMapOf<String, JSONObject>() }
@@ -50,6 +58,10 @@ class MainActivity : ComponentActivity() {
         var status by remember { mutableStateOf(JSONObject()) }
         var showLicenses by remember { mutableStateOf(false) }
         var periodic by remember { mutableStateOf(store.periodic) }
+        var continuousRequested by remember { mutableStateOf(background.continuousRequested) }
+        var interruption by remember { mutableStateOf(background.interruptionText()) }
+        var batteryExempt by remember { mutableStateOf(false) }
+        var batteryRestricted by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
         fun perform(action: suspend () -> Unit) {
             if (busy) return
@@ -93,9 +105,14 @@ class MainActivity : ComponentActivity() {
             while (isActive) {
                 val current = withContext(NativeBridge.dispatcher) { NativeBridge.request("status") }
                 status = current; running = current.optBoolean("running")
+                continuousRequested = background.continuousRequested
+                interruption = background.interruptionText()
+                batteryExempt = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+                batteryRestricted = Build.VERSION.SDK_INT >= 28 && getSystemService(ActivityManager::class.java).isBackgroundRestricted
                 val savedMessage = store.message
-                message = if (!running && savedMessage in listOf("Continuous synchronization is running", "Stopping synchronization…")) {
-                    "Synchronization is stopped; press Start to resume"
+                message = if (!running && (savedMessage == "Continuous synchronization is running" || savedMessage.startsWith("Stopping synchronization"))) {
+                    if (continuousRequested) "Continuous sync is paused; scheduled checks remain enabled"
+                    else "Synchronization is stopped; press Start to resume"
                 } else savedMessage
                 delay(1000)
             }
@@ -110,7 +127,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        if (showSshKeys) SshKeyManager(sshKeys, !busy && !running && !periodic,
+        if (showSshKeys) SshKeyManager(sshKeys, !busy && !running && !continuousRequested && !periodic,
             onGenerate = { name -> perform {
                 val generated = store.generateSshKey(name)
                 withContext(Dispatchers.Main) {
@@ -126,26 +143,37 @@ class MainActivity : ComponentActivity() {
                 Text("SynchroGit", style = MaterialTheme.typography.headlineLarge)
                 Text("Your repositories, kept in sync", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(12.dp))
-                Text(if (running) "Continuous sync is running" else "Continuous sync is stopped", style = MaterialTheme.typography.titleMedium)
+                Text(when {
+                    running -> "Continuous sync is running"
+                    continuousRequested -> "Continuous sync is paused"
+                    else -> "Continuous sync is stopped"
+                }, style = MaterialTheme.typography.titleMedium)
                 Text(message, style = MaterialTheme.typography.bodySmall)
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(enabled = !busy && repos.length() > 0, onClick = {
-                        if (running) { stopService(Intent(this@MainActivity, SyncService::class.java)); store.message = "Stopping synchronization…" }
+                        if (running || continuousRequested) {
+                            SyncService.stop(this@MainActivity)
+                            continuousRequested = false
+                            store.message = "Stopping synchronization..."
+                        }
                         else {
                             perform {
                                 persist()
-                                withContext(Dispatchers.Main) { startForegroundService(Intent(this@MainActivity, SyncService::class.java)) }
+                                withContext(Dispatchers.Main) {
+                                    SyncService.start(this@MainActivity)
+                                    continuousRequested = background.continuousRequested
+                                }
                             }
                         }
-                    }) { Text(if (running) "Stop" else "Start") }
+                    }) { Text(if (running || continuousRequested) "Stop" else "Start") }
                     OutlinedButton(enabled = running && !busy, onClick = { perform { NativeBridge.request("sync"); store.message = "Sync queued" } }) { Text("Sync now") }
                 }
                 val statuses = status.optJSONArray("repos") ?: JSONArray()
                 for (i in 0 until statuses.length()) {
                     val repo = statuses.getJSONObject(i)
                     val last = repo.getJSONObject("last_sync")
-                    Text("${repo.getString("name")}: ${last.optString("last_outcome")} — ${last.optString("last_cycle_at", "never")}", style = MaterialTheme.typography.bodySmall)
+                    Text("${repo.getString("name")}: ${last.optString("last_outcome")} - ${last.optString("last_cycle_at", "never")}", style = MaterialTheme.typography.bodySmall)
                     if (!last.isNull("last_error")) Text(last.getString("last_error"), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }
@@ -161,7 +189,8 @@ class MainActivity : ComponentActivity() {
             }
             item {
                 Text("Background checks", style = MaterialTheme.typography.titleMedium)
-                Toggle("Scheduled sync (15 minutes or later)", periodic, !busy && !running) { enabled ->
+                if (continuousRequested) Text("Scheduled fallback is enabled. If Android stops continuous sync, checks continue every 15 minutes or later. Opening the app resumes continuous sync.", style = MaterialTheme.typography.bodySmall)
+                Toggle("Scheduled sync (15 minutes or later)", periodic, !busy && !running && !continuousRequested) { enabled ->
                     perform {
                         if (enabled) persist()
                         ScheduledSync.configure(this@MainActivity, enabled)
@@ -169,7 +198,16 @@ class MainActivity : ComponentActivity() {
                         store.message = if (enabled) "Scheduled synchronization enabled" else "Scheduled synchronization disabled"
                     }
                 }
-                Text("Continuous mode watches local edits and uses the interval below. Android may suspend it during sleep and limits background data-sync services on Android 15+ to 6 hours per day. Scheduled mode does not watch edits immediately.", style = MaterialTheme.typography.bodySmall)
+                Text("The switch also keeps scheduled checks enabled after you press Stop. Continuous mode watches local edits and uses the interval below. Android 15+ limits its background runtime to 6 hours; scheduled checks can be delayed and do not watch edits immediately.", style = MaterialTheme.typography.bodySmall)
+                interruption?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                Text(when {
+                    batteryRestricted -> "Android restricts this app's background activity. Allow background use in battery settings."
+                    !batteryExempt -> "Battery optimization can delay synchronization while the phone is asleep."
+                    else -> "Battery optimization is disabled for SynchroGit. Android's service time limit still applies."
+                }, style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                }) { Text("Battery settings") }
                 if (Build.VERSION.SDK_INT < 33) {
                     Text("To hide the continuous-sync notification, turn off SynchroGit notifications in Android settings. Synchronization will continue.", style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = {
@@ -180,19 +218,19 @@ class MainActivity : ComponentActivity() {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Defaults", style = MaterialTheme.typography.titleLarge)
-                    Text("[defaults] · applies to every repository", style = MaterialTheme.typography.bodySmall)
+                    Text("[defaults] - applies to every repository", style = MaterialTheme.typography.bodySmall)
                     val defaults = settings.optJSONObject("defaults") ?: JSONObject()
                     fun change(key: String, value: Any) = update { it.put("defaults", JSONObject(defaults.toString()).put(key, value)) }
-                    Field("Pull interval", defaults.optString("interval", "15s"), !running && !busy) { change("interval", it) }
-                    Field("Local edit debounce", defaults.optString("debounce", "2s"), !running && !busy) { change("debounce", it) }
+                    Field("Pull interval", defaults.optString("interval", "15s"), !running && !continuousRequested && !busy) { change("interval", it) }
+                    Field("Local edit debounce", defaults.optString("debounce", "2s"), !running && !continuousRequested && !busy) { change("debounce", it) }
                     var advanced by remember { mutableStateOf(false) }
                     TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "Hide advanced defaults" else "Advanced defaults") }
                     if (advanced) {
                         for ((key, label, fallback) in listOf(Triple("backoff-min", "Minimum retry delay", "15s"), Triple("backoff-max", "Maximum retry delay", "5m"), Triple("git-timeout", "Git timeout", "60s"), Triple("commit-template", "Commit message", "{ts} ({host})"))) {
-                            Field(label, defaults.optString(key, fallback), !running && !busy) { change(key, it) }
+                            Field(label, defaults.optString(key, fallback), !running && !continuousRequested && !busy) { change(key, it) }
                         }
-                        Toggle("Pull remote changes", defaults.optBoolean("auto-pull", true), !running && !busy) { change("auto-pull", it) }
-                        Toggle("Push local commits", defaults.optBoolean("auto-push", true), !running && !busy) { change("auto-push", it) }
+                        Toggle("Pull remote changes", defaults.optBoolean("auto-pull", true), !running && !continuousRequested && !busy) { change("auto-pull", it) }
+                        Toggle("Push local commits", defaults.optBoolean("auto-push", true), !running && !continuousRequested && !busy) { change("auto-push", it) }
                         Text("Conflicts keep the remote version and save local edits in a conflict copy.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -202,30 +240,30 @@ class MainActivity : ComponentActivity() {
                     Text("Git defaults", style = MaterialTheme.typography.titleLarge)
                     Text("Shared author and SSH key. Repositories can override these below. Git connection settings are stored separately from config.toml.", style = MaterialTheme.typography.bodySmall)
                     fun change(key: String, value: String) { gitDefaults = JSONObject(gitDefaults.toString()).put(key, value) }
-                    Field("Default commit author name", gitDefaults.optString("name"), !busy && !running && !periodic) { change("name", it) }
-                    Field("Default commit author email", gitDefaults.optString("email"), !busy && !running && !periodic) { change("email", it) }
+                    Field("Default commit author name", gitDefaults.optString("name"), !busy && !running && !continuousRequested && !periodic) { change("name", it) }
+                    Field("Default commit author email", gitDefaults.optString("email"), !busy && !running && !continuousRequested && !periodic) { change("email", it) }
                     ChoiceField("Default SSH key", gitDefaults.optString("ssh_key_id"),
-                        listOf("" to "Choose per repository") + sshKeys.map { it.id to it.name }, !busy && !running && !periodic) { change("ssh_key_id", it) }
+                        listOf("" to "Choose per repository") + sshKeys.map { it.id to it.name }, !busy && !running && !continuousRequested && !periodic) { change("ssh_key_id", it) }
                     OutlinedButton(onClick = { showSshKeys = true }) { Text("Manage SSH keys") }
                 }
             }
             items((0 until repos.length()).toList()) { index ->
                 val repo = repos.getJSONObject(index)
                 RepositoryEditor(repo, settings.optJSONObject("defaults") ?: JSONObject(), gitDefaults, sshKeys, store, connectionDrafts,
-                    !busy && !running && !periodic, onManageKeys = { showSshKeys = true },
+                    !busy && !running && !continuousRequested && !periodic, onManageKeys = { showSshKeys = true },
                     saveGitDefaults = { store.saveGitDefaults(gitDefaults) },
                     onChange = { replacement -> update { it.getJSONArray("repo").put(index, replacement) } },
                     onRemove = { update { it.getJSONArray("repo").remove(index) } },
                     perform = { action -> perform(action) })
             }
             item {
-                OutlinedButton(enabled = !busy && !running && !periodic, onClick = {
+                OutlinedButton(enabled = !busy && !running && !continuousRequested && !periodic, onClick = {
                     update { it.getJSONArray("repo").put(JSONObject().put("name", "repo${repos.length() + 1}").put("path", "").put("remote", "origin")) }
                 }) { Text("Add repository") }
-                Button(modifier = Modifier.fillMaxWidth(), enabled = !busy && !running && repos.length() > 0, onClick = { perform { persist() } }) { Text("Save settings") }
+                Button(modifier = Modifier.fillMaxWidth(), enabled = !busy && !running && !continuousRequested && repos.length() > 0, onClick = { perform { persist() } }) { Text("Save settings") }
                 Text("Stop continuous sync before editing settings. Turn off scheduled sync before changing repository paths or credentials.", style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(enabled = !busy && !running && !periodic, onClick = { importLauncher.launch(arrayOf("*/*")) }) { Text("Import TOML") }
+                    TextButton(enabled = !busy && !running && !continuousRequested && !periodic, onClick = { importLauncher.launch(arrayOf("*/*")) }) { Text("Import TOML") }
                     TextButton(enabled = !busy, onClick = { export.launch("config.toml") }) { Text("Export TOML") }
                 }
                 TextButton(onClick = { showLicenses = true }) { Text("Open-source licenses") }
@@ -242,7 +280,7 @@ class MainActivity : ComponentActivity() {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(repo.optString("name", "Repository"), style = MaterialTheme.typography.titleLarge)
-                Text("[[repo]] · overrides defaults only where set", style = MaterialTheme.typography.bodySmall)
+                Text("[[repo]] - overrides defaults only where set", style = MaterialTheme.typography.bodySmall)
                 Field("Name", repo.optString("name"), enabled) { change("name", it) }
                 Field("Folder path", path, enabled) { change("path", it) }
                 TextButton(enabled = enabled, onClick = { change("path", File(filesDir, "repositories/${repo.optString("name", "notes")}").canonicalPath) }) { Text("Use an app-private folder") }

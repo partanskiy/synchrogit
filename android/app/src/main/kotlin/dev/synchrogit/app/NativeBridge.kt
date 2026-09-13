@@ -32,5 +32,9 @@ object NativeBridge {
     }
 }
 class SynchroGitApplication : Application() {
-    override fun onCreate() { super.onCreate(); NativeBridge.initialize(this) }
+    override fun onCreate() {
+        super.onCreate()
+        BackgroundState(this).recordPreviousExit(this)
+        NativeBridge.initialize(this)
+    }
 }

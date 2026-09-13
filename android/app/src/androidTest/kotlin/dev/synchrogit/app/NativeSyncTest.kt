@@ -1,7 +1,6 @@
 package dev.synchrogit.app
 
 import android.app.NotificationManager
-import android.content.Intent
 import android.os.Build
 import android.os.Environment
 import androidx.test.core.app.ActivityScenario
@@ -89,7 +88,7 @@ class NativeSyncTest {
             config.writeText(configText(a, watch = true))
             store.configFile.writeText(config.readText())
             ActivityScenario.launch(MainActivity::class.java).use { activity ->
-                activity.onActivity { it.startForegroundService(Intent(it, SyncService::class.java)) }
+                activity.onActivity { SyncService.start(it) }
                 for (attempt in 0 until 100) {
                     if (call("status").optBoolean("running")) break
                     Thread.sleep(100)
@@ -108,7 +107,7 @@ class NativeSyncTest {
                     if (last.optString("last_outcome") == "pushed") { observed = true; break }
                 }
                 assertTrue("local file edit should trigger the Rust watcher", observed)
-                activity.onActivity { it.stopService(Intent(it, SyncService::class.java)) }
+                activity.onActivity { SyncService.stop(it) }
                 for (attempt in 0 until 100) {
                     if (!call("status").optBoolean("running")) break
                     Thread.sleep(100)
@@ -118,7 +117,7 @@ class NativeSyncTest {
             cycle("b")
             assertEquals("filesystem event\n", File(b, "watched.md").readText())
         } finally {
-            context.stopService(Intent(context, SyncService::class.java))
+            SyncService.stop(context)
             call("stop")
             if (originalConfig == null) store.configFile.delete() else store.configFile.writeBytes(originalConfig)
             root.deleteRecursively()
