@@ -54,8 +54,13 @@ def nodes():
 
 
 def tap(text):
-    matches = [n for n in nodes() if n.get("text") == text and n.get("enabled") == "true"]
-    assert len(matches) == 1, f"Expected one {text} control"
+    matches = []
+    def ready():
+        nonlocal matches
+        matches = [n for n in nodes() if n.get("text") == text and n.get("enabled") == "true"]
+        assert len(matches) <= 1, f"Expected at most one {text} control"
+        return bool(matches)
+    wait_for(f"Control ready: {text}", ready, seconds=30)
     x1, y1, x2, y2 = map(int, re.findall(r"\d+", matches[0].get("bounds")))
     shell("input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
 
@@ -99,13 +104,17 @@ def jobs():
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--process-only", action="store_true", help="Test only debug-process recovery; never change the system timeout")
 args = parser.parse_args()
-assert args.process_only or shell("getprop", "ro.kernel.qemu") == "1", "Timeout tests require a disposable emulator"
+emulator = shell("getprop", "ro.kernel.qemu") == "1"
+assert args.process_only or emulator, "Timeout tests require a disposable emulator"
 assert int(shell("getprop", "ro.build.version.sdk")) >= 35
 old_timeout = shell("device_config", "get", "activity_manager", TIMEOUT)
 clock_restore = None
 try:
     if not args.process_only:
         shell("device_config", "put", "activity_manager", TIMEOUT, "600000")
+    if emulator:
+        shell("input", "keyevent", "KEYCODE_WAKEUP")
+        shell("wm", "dismiss-keyguard")
     setup = shell("am", "instrument", "-w", "-r", "-e", "class",
                   "dev.synchrogit.app.BackgroundLifecycleTest#prepareAdbScenario",
                   "-e", "background-scenario", "true",
@@ -173,6 +182,17 @@ try:
     assert not foreground(), "Opening the app must respect an explicit Stop"
     results.append({"check": "resume respects user intent and keeps drawer notifications hidden", "passed": True})
     print(json.dumps(results, indent=2), flush=True)
+except Exception:
+    # The emulator contains only disposable fixtures, never user repositories.
+    if emulator:
+        directory = Path("android/app/build/reports/background-failure")
+        directory.mkdir(parents=True, exist_ok=True)
+        screenshot = subprocess.run(["adb", "exec-out", "screencap", "-p"],
+                                    capture_output=True, timeout=30)
+        (directory / "screen.png").write_bytes(screenshot.stdout)
+        (directory / "service.txt").write_text(shell("dumpsys", "activity", "services", APP))
+        (directory / "jobs.txt").write_text(shell("dumpsys", "jobscheduler", APP))
+    raise
 finally:
     if clock_restore is not None:
         original, elapsed, automatic = clock_restore
