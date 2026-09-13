@@ -63,6 +63,9 @@ jobs:
             adb shell appops set --uid dev.synchrogit.app.debug MANAGE_EXTERNAL_STORAGE allow
             adb reverse tcp:22229 tcp:22229
             android/gradlew -p android connectedDebugAndroidTest --console=plain
+            # The Gradle test runner removes its test APK during cleanup.
+            android/gradlew -p android installDebug installDebugAndroidTest --console=plain
+            adb shell appops set --uid dev.synchrogit.app.debug MANAGE_EXTERNAL_STORAGE allow
             python3 scripts/android-background-test.py
       - name: Stop disposable SSH Git server
         if: always()
