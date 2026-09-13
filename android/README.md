@@ -166,9 +166,11 @@ python3 scripts/android-background-test.py
 This test kills only the debug process and verifies that Android restores the
 service and filesystem synchronization. It then shortens the emulator's dataSync
 time limit, verifies graceful timeout and an actual scheduled Git cycle, and
-checks automatic resume, explicit Stop and hidden drawer notifications. The
-original system timeout is restored in `finally`. The timeout test refuses
-physical devices because that setting affects all dataSync services. To test
+checks automatic resume, explicit Stop and hidden drawer notifications. It
+advances the emulator's wall clock past WorkManager's minimum periodic interval
+before requesting the scheduled cycle. The original timeout, clock and automatic
+time setting are restored in `finally`. The full test refuses physical devices
+because these settings affect the whole device. To test
 only debug-process recovery on a phone, use `--process-only` instead.
 The all-files test permission above applies to Android 11+; on Android 8-10,
 grant the debug app's storage permission instead.

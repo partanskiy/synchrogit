@@ -93,7 +93,8 @@ removed the service and its automatic scheduled work. The normal application
 and Obsidian vault were not used for this process-kill test.
 
 The accelerated dataSync timeout test runs only on an isolated Android 16
-emulator. Physical USB-connected checks do not prove unlimited background
+emulator, including advancing its wall clock past WorkManager's minimum interval.
+Physical USB-connected checks do not prove unlimited background
 operation, immediate polling during deep sleep, or behavior under every Samsung
 battery policy. Android's six-hour service limit and delayed scheduled work
 remain platform constraints.
