@@ -52,8 +52,8 @@ correct service status after an activity/process restart.
 The instrumentation SSH transport tests use a disposable loopback server;
 the release APK checks above use the private GitHub test repository.
 
-Long unattended operation, deep Doze, Samsung battery restrictions, reboot and
-the Android 15+ six-hour dataSync service limit require separate duration tests.
+For v26.9.1, long unattended operation, deep Doze, Samsung battery restrictions,
+reboot and the Android 15+ six-hour dataSync service limit were not covered.
 USB-connected tests do not establish reliability in those conditions.
 
 ## v26.9.2 settings and shared SSH keys
@@ -92,9 +92,22 @@ committed and pushed a new file without reopening the activity. Explicit Stop
 removed the service and its automatic scheduled work. The normal application
 and Obsidian vault were not used for this process-kill test.
 
-The accelerated dataSync timeout test runs only on an isolated Android 16
+The v26.9.4 accelerated dataSync timeout test ran only on an isolated Android 16
 emulator, including advancing its wall clock past WorkManager's minimum interval.
 Physical USB-connected checks do not prove unlimited background
 operation, immediate polling during deep sleep, or behavior under every Samsung
-battery policy. Android's six-hour service limit and delayed scheduled work
-remain platform constraints.
+battery policy. That release still used dataSync and its six-hour service limit.
+
+## Continuous specialUse service, v26.9.5
+
+The GitHub APK now uses `specialUse` on Android 14+ for the user-started file
+watcher and remote polling. The dataSync six-hour limit no longer applies to
+this service. Process recovery, periodic fallback and explicit Stop are retained.
+The Android 16 emulator test checks the runtime service type and continued Git
+synchronization beyond a shortened dataSync deadline, then stops the service
+externally and exercises a real scheduled Git cycle and automatic resume.
+
+The physical Samsung was not connected when this change was developed.
+These checks do not establish prolonged unattended operation on that phone,
+immediate synchronization during deep Doze, or exemption from vendor battery
+restrictions. Scheduled checks can still be delayed.

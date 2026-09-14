@@ -52,7 +52,7 @@ class BackgroundLifecycleTest {
         }
     }
 
-    /** Setup entry point for the external process-death/timeout test, not a user repository. */
+    /** Setup entry point for external background tests, not a user repository. */
     @Test fun prepareAdbScenario() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("background-scenario") == "true")
         assertTrue(context.packageName.endsWith(".debug"))

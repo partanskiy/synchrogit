@@ -198,12 +198,12 @@ class MainActivity : ComponentActivity() {
                         store.message = if (enabled) "Scheduled synchronization enabled" else "Scheduled synchronization disabled"
                     }
                 }
-                Text("The switch also keeps scheduled checks enabled after you press Stop. Continuous mode watches local edits and uses the interval below. Android 15+ limits its background runtime to 6 hours; scheduled checks can be delayed and do not watch edits immediately.", style = MaterialTheme.typography.bodySmall)
+                Text("The switch also keeps scheduled checks enabled after you press Stop. Continuous mode watches local edits and uses the interval below. Scheduled checks can be delayed and do not watch edits immediately.", style = MaterialTheme.typography.bodySmall)
                 interruption?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 Text(when {
                     batteryRestricted -> "Android restricts this app's background activity. Allow background use in battery settings."
                     !batteryExempt -> "Battery optimization can delay synchronization while the phone is asleep."
-                    else -> "Battery optimization is disabled for SynchroGit. Android's service time limit still applies."
+                    else -> "Battery optimization is disabled for SynchroGit. Android can still interrupt background execution."
                 }, style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = {
                     startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))

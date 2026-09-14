@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise real Android process recovery and timeouts on a disposable emulator.
+"""Exercise specialUse synchronization, recovery and scheduled fallback.
 
 System timeout and clock overrides affect the whole device, so the full test
 requires an emulator. It only writes the debug app's local Git fixture.
@@ -123,6 +123,9 @@ try:
     open_app()
     tap("Start")
     wait_for("Continuous service starts", foreground)
+    service = shell("dumpsys", "activity", "services", APP)
+    assert re.search(r"foregroundServiceType=(?:0x40000000|1073741824)\b", service), \
+        "Continuous sync must run as specialUse, without the dataSync type"
     shell("input", "keyevent", "KEYCODE_HOME")
     before = edit("before-process-death")
     wait_for("Initial watcher pushes to the local remote", lambda: converged(before))
@@ -146,16 +149,34 @@ try:
         raise SystemExit(0)
     shell("device_config", "put", "activity_manager", TIMEOUT, "15000")
     tap("Start")
-    wait_for("Service starts for the Android timeout test", foreground)
+    wait_for("Service starts with a shortened dataSync limit", foreground)
+    previous_interruption = preferences().get("interrupted_at")
     shell("input", "keyevent", "KEYCODE_HOME")
-    wait_for("Android timeout stops the service gracefully", lambda: not foreground())
+    # Stay in the background beyond the dataSync deadline and its grace period.
+    # Poll throughout the window so a stop/restart cannot masquerade as survival.
+    pid = shell("pidof", APP)
+    deadline = time.monotonic() + 45
+    while time.monotonic() < deadline:
+        assert foreground(), "specialUse must outlast the dataSync limit"
+        assert shell("pidof", APP) == pid, "The service must survive without a process restart"
+        assert preferences().get("interrupted_at") == previous_interruption
+        time.sleep(1)
+    before = edit("beyond-datasync-deadline")
+    wait_for("The watcher still synchronizes beyond the dataSync deadline", lambda: converged(before))
+    results.append({"check": "specialUse outlasts the dataSync deadline and continues filesystem synchronization", "passed": True})
+
+    # Stop just the service as its own UID, retaining the user's saved intent
+    # and WorkManager jobs. A package force-stop would also suppress those jobs.
+    # Android's stopservice command returns nonzero even when it stops the service.
+    shell("run-as", APP, "am", "stopservice", "--user", "0", "-n", APP + "/dev.synchrogit.app.SyncService", check=False)
+    wait_for("External service stop leaves continuous sync paused", lambda: not foreground())
     state = preferences()
-    assert state["continuous"] == "true" and state["interruption"] == "timeout", state
-    wait_for("Scheduled fallback remains registered after the timeout", lambda: bool(jobs()))
-    before = edit("after-android-timeout")
+    assert state["continuous"] == "true" and state["interruption"] == "service_stopped", state
+    wait_for("Scheduled fallback remains registered after the service stops", lambda: bool(jobs()))
+    before = edit("after-service-stop")
     # JobScheduler's -f bypasses platform constraints, but WorkManager also
     # checks wall-clock time against its minimum periodic interval. Advance
-    # only this disposable emulator; dataSync accounting uses elapsed time.
+    # only this disposable emulator, after checking specialUse with real time.
     clock_restore = (int(shell("date", "+%s")) * 1000, time.monotonic(),
                      shell("settings", "get", "global", "auto_time"))
     shell("settings", "put", "global", "auto_time", "0")
@@ -167,13 +188,13 @@ try:
         command += ["-n", namespace]
     output = shell(*command, APP, job_id)
     assert "Running job" in output, output
-    wait_for("Scheduled fallback synchronizes after the dataSync budget expires", lambda: converged(before))
-    assert not foreground(), "Fallback must not restart a time-limited foreground service"
-    results.append({"check": "real Android timeout preserves working scheduled fallback", "passed": True})
+    wait_for("Scheduled fallback synchronizes after the service stops", lambda: converged(before))
+    assert not foreground(), "Fallback must perform one Git cycle without starting a foreground service"
+    results.append({"check": "external service stop preserves working scheduled fallback", "passed": True})
 
     open_app()
     wait_for("Opening the app resumes requested continuous synchronization", foreground)
-    assert preferences()["interruption"] == "timeout", "Preserve the last interruption for diagnosis"
+    assert preferences()["interruption"] == "service_stopped", "Preserve the last interruption for diagnosis"
     assert not any("|" + APP + "|" in line for line in shell("cmd", "notification", "list").splitlines())
     tap("Stop")
     wait_for("User Stop cancels automatic fallback", lambda: not foreground() and not jobs())

@@ -76,10 +76,11 @@ verified automatically.
 Continuous sync watches local edits and checks remotes on the timer. On Android
 13+, it runs without notifications in the drawer; Android's active-apps indicator
 remains. On Android 8-12, its silent service notification can be hidden in system
-settings. Android can suspend background execution and, on Android 15+, limits
-background dataSync services to six hours per day. Starting continuous sync also
-enables scheduled fallback checks every 15 minutes or later. Android can restart
-the service after process death; opening the app resumes it after a timeout.
+settings. The GitHub APK uses a `specialUse` foreground service on Android 14+,
+so the Android 15+ six-hour `dataSync` limit does not apply. Android can still
+suspend background execution. Starting continuous sync also enables scheduled
+fallback checks every 15 minutes or later. Android can restart the service after
+process death; opening the app resumes it if it was interrupted.
 The app shows the last interruption and battery restrictions. See the [Android guide](android/README.md)
 for folder access, credentials, background behavior and building the app.
 
