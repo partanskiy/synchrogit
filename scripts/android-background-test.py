@@ -124,7 +124,7 @@ try:
     tap("Start")
     wait_for("Continuous service starts", foreground)
     service = shell("dumpsys", "activity", "services", APP)
-    assert re.search(r"foregroundServiceType=(?:0x40000000|1073741824)\b", service), \
+    assert re.search(r"\bisForeground=true[^\n]*\btypes=0x40000000\b", service), \
         "Continuous sync must run as specialUse, without the dataSync type"
     shell("input", "keyevent", "KEYCODE_HOME")
     before = edit("before-process-death")
