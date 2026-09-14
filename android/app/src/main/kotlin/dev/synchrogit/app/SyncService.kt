@@ -86,7 +86,7 @@ class SyncService : Service() {
     }
 
     companion object {
-        /** Called from a visible activity, never from a worker or boot receiver. */
+        /** Started by the user, a visible activity, or a boot receiver restoring saved intent. */
         fun start(context: Context) {
             BackgroundState(context).continuousRequested = true
             ScheduledSync.reconcile(context)

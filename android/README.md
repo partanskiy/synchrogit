@@ -41,8 +41,11 @@ The service asks Android to restore it after process death. Its saved user inten
 prevents a queued restart from undoing an explicit **Stop**. Stop also cancels
 automatic fallback. The separate **Scheduled sync** switch keeps periodic checks
 enabled independently, including after Stop. Scheduled work survives process
-death and reboot. After reboot, scheduled checks handle synchronization until
-you open the app; the app does not start continuous mode from a boot receiver.
+death and reboot. The app also restores requested continuous sync after reboot,
+once you unlock the phone for the first time. The `BOOT_COMPLETED` receiver waits
+for credential-protected storage, so configuration and encrypted keys keep their
+existing protection. No foreground activity needs to be opened. An explicit
+**Stop** prevents continuous sync from starting on the next boot.
 Android's Force stop prevents background work until the app is opened again.
 An upgrade from a release older than v26.9.4 requires pressing Start once to
 enable recovery. Updates from v26.9.4 retain the saved request for continuous sync.
@@ -175,7 +178,9 @@ synchronization. It then shortens the emulator's `dataSync` time limit and
 verifies that the same process and service continue watching and synchronizing
 past that deadline. An external service stop then checks the surviving scheduled
 fallback with an actual Git cycle, automatic resume, explicit Stop and hidden
-drawer notifications. The test
+drawer notifications. Two real emulator reboots verify that continuous sync and
+the watcher resume without opening the app, and that Stop survives a reboot.
+The test
 advances the emulator's wall clock past WorkManager's minimum periodic interval
 before requesting the scheduled cycle. The original timeout, clock and automatic
 time setting are restored in `finally`. The full test refuses physical devices

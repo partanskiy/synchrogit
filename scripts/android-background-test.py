@@ -69,6 +69,19 @@ def open_app():
     shell("am", "start", "-W", "-n", APP + "/dev.synchrogit.app.MainActivity")
 
 
+def reboot_emulator():
+    assert emulator, "Never reboot a physical device in this test"
+    previous_boot = shell("cat", "/proc/sys/kernel/random/boot_id")
+    subprocess.run(["adb", "reboot"], check=True, timeout=30)
+    subprocess.run(["adb", "wait-for-device"], check=True, timeout=60)
+    wait_for("Emulator completes a real reboot",
+             lambda: shell("getprop", "sys.boot_completed", check=False) == "1"
+             and shell("cat", "/proc/sys/kernel/random/boot_id") != previous_boot,
+             seconds=180)
+    shell("input", "keyevent", "KEYCODE_WAKEUP")
+    shell("wm", "dismiss-keyguard")
+
+
 def ref(repository):
     git = ".git/" if repository == "a" else ""
     return shell("run-as", APP, "cat", f"{ROOT}/{repository}/{git}refs/heads/main")
@@ -196,9 +209,28 @@ try:
     wait_for("Opening the app resumes requested continuous synchronization", foreground)
     assert preferences()["interruption"] == "service_stopped", "Preserve the last interruption for diagnosis"
     assert not any("|" + APP + "|" in line for line in shell("cmd", "notification", "list").splitlines())
+
+    shell("input", "keyevent", "KEYCODE_HOME")
+    reboot_emulator()
+    wait_for("Boot restores requested continuous sync without opening the app", foreground)
+    assert preferences()["continuous"] == "true"
+    before = edit("after-device-reboot")
+    wait_for("The watcher synchronizes after reboot without opening the app", lambda: converged(before))
+    results.append({"check": "device reboot restores continuous service and filesystem synchronization", "passed": True})
+
+    open_app()
     tap("Stop")
     wait_for("User Stop cancels automatic fallback", lambda: not foreground() and not jobs())
     assert preferences()["continuous"] == "false"
+    shell("input", "keyevent", "KEYCODE_HOME")
+    reboot_emulator()
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        assert not foreground(), "Boot must respect an explicit Stop"
+        assert preferences()["continuous"] == "false"
+        time.sleep(1)
+    assert not jobs(), "Boot must not restore automatic fallback after explicit Stop"
+    results.append({"check": "explicit Stop remains effective after device reboot", "passed": True})
     open_app()
     assert not foreground(), "Opening the app must respect an explicit Stop"
     results.append({"check": "resume respects user intent and keeps drawer notifications hidden", "passed": True})

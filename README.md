@@ -80,7 +80,9 @@ settings. The GitHub APK uses a `specialUse` foreground service on Android 14+,
 so the Android 15+ six-hour `dataSync` limit does not apply. Android can still
 suspend background execution. Starting continuous sync also enables scheduled
 fallback checks every 15 minutes or later. Android can restart the service after
-process death; opening the app resumes it if it was interrupted.
+process death. Requested continuous sync also resumes after a phone reboot and
+the first unlock; **Stop** keeps it disabled across reboots. Opening the app
+resumes requested sync if it was interrupted.
 The app shows the last interruption and battery restrictions. See the [Android guide](android/README.md)
 for folder access, credentials, background behavior and building the app.
 
