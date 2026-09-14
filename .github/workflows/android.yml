@@ -67,6 +67,19 @@ jobs:
             android/gradlew -p android installDebug installDebugAndroidTest --console=plain
             adb shell appops set --uid dev.synchrogit.app.debug MANAGE_EXTERNAL_STORAGE allow
             python3 scripts/android-background-test.py
+      - name: Verify foreground service compatibility on Android 10
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell am instrument -w -r -e class 'dev.synchrogit.app.NativeSyncTest#nativeSyncPreservesEditsConflictsAndRemoteDeletions' dev.synchrogit.app.debug.test/androidx.test.runner.AndroidJUnitRunner > android/app/build/reports/android-29-compatibility.txt
+            cat android/app/build/reports/android-29-compatibility.txt
+            grep -q 'OK (1 test)' android/app/build/reports/android-29-compatibility.txt
       - name: Stop disposable SSH Git server
         if: always()
         run: python3 scripts/android-ssh-fixture.py --directory "$RUNNER_TEMP/synchrogit-ssh-fixture" --stop

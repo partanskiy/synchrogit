@@ -18,15 +18,21 @@ The universal APK contains ARM64 and x86_64 libraries with 16 KiB ELF alignment.
    per-repository results and failures. Local edits use the Rust filesystem
    watcher; remote updates use the configured timer.
 
-Continuous mode uses a dataSync foreground service. On Android 13+, the app does
+Continuous mode uses a `specialUse` foreground service on Android 14+ and a
+regular foreground service on older versions. The APK is distributed through
+GitHub and Obtainium, with no planned Google Play publication. Its manifest
+describes the user-started, continuous file watcher and remote polling. This
+choice keeps continuous mode outside Android 15+'s six-hour `dataSync` budget;
+it does not guarantee that Android will keep the process or CPU running.
+See [foreground service types](https://developer.android.com/develop/background-work/services/fgs/service-types#special-use).
+
+On Android 13+, the app does
 not request notification permission and does not show notifications in the drawer.
 Android can still list it in **Active apps** while the service runs. On Android
 8-12, the required service notification is silent; use **Android notification
 settings** under **Background checks** to hide it without stopping synchronization.
-Android 15+ limits background runtime of this service type to six hours per
-24 hours; bringing the app to the foreground resets that budget. Starting
-continuous sync also registers automatic WorkManager fallback checks. After
-a timeout the service stops gracefully and the fallback remains scheduled,
+Starting continuous sync also registers automatic WorkManager fallback checks.
+If the service is interrupted, the fallback remains scheduled,
 with a minimum interval of 15 minutes. Android may delay checks further; they
 do not provide immediate file watching. Opening the app automatically resumes
 continuous synchronization if you previously started it.
@@ -35,17 +41,17 @@ The service asks Android to restore it after process death. Its saved user inten
 prevents a queued restart from undoing an explicit **Stop**. Stop also cancels
 automatic fallback. The separate **Scheduled sync** switch keeps periodic checks
 enabled independently, including after Stop. Scheduled work survives process
-death and reboot; continuous dataSync services cannot start from a boot receiver
-on Android 15+. Android's Force stop prevents background work until the app is
-opened again. An upgrade from an older release requires pressing Start once to
-enable the new recovery behavior.
+death and reboot. After reboot, scheduled checks handle synchronization until
+you open the app; the app does not start continuous mode from a boot receiver.
+Android's Force stop prevents background work until the app is opened again.
+An upgrade from a release older than v26.9.4 requires pressing Start once to
+enable recovery. Updates from v26.9.4 retain the saved request for continuous sync.
 
 **Background checks** shows the last service interruption or Android process-exit
 reason and time, plus the current battery restrictions. **Battery settings** opens
 the app's Android settings, where you can allow background battery use. Doze and
-vendor battery management can delay work even while a service exists. Exemption
-from battery optimization does not remove the dataSync time limit. The app does
-not automatically change these settings, keep the CPU awake continuously, or
+vendor battery management can delay work even while a service exists. The app
+does not automatically change these settings, keep the CPU awake continuously, or
 claim that a paused service is running. Diagnostic history stores only a reason
 and time, without credentials, repository contents or process traces.
 
@@ -163,15 +169,20 @@ The emulator uses Android 16 and additionally runs:
 python3 scripts/android-background-test.py
 ```
 
-This test kills only the debug process and verifies that Android restores the
-service and filesystem synchronization. It then shortens the emulator's dataSync
-time limit, verifies graceful timeout and an actual scheduled Git cycle, and
-checks automatic resume, explicit Stop and hidden drawer notifications. It
+This test verifies the actual `specialUse` service type, kills only the debug
+process and checks that Android restores the service and filesystem
+synchronization. It then shortens the emulator's `dataSync` time limit and
+verifies that the same process and service continue watching and synchronizing
+past that deadline. An external service stop then checks the surviving scheduled
+fallback with an actual Git cycle, automatic resume, explicit Stop and hidden
+drawer notifications. The test
 advances the emulator's wall clock past WorkManager's minimum periodic interval
 before requesting the scheduled cycle. The original timeout, clock and automatic
 time setting are restored in `finally`. The full test refuses physical devices
 because these settings affect the whole device. To test
 only debug-process recovery on a phone, use `--process-only` instead.
+The workflow also runs the Git-cycle and foreground-service watcher test on
+Android 10 to check compatibility before the `specialUse` type was introduced.
 The all-files test permission above applies to Android 11+; on Android 8-10,
 grant the debug app's storage permission instead.
 

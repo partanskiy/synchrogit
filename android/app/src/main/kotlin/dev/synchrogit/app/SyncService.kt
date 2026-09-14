@@ -3,7 +3,9 @@ package dev.synchrogit.app
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.IBinder
+import androidx.core.app.ServiceCompat
 import androidx.work.*
 import kotlinx.coroutines.*
 import org.json.JSONObject
@@ -38,9 +40,10 @@ class SyncService : Service() {
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_SERVICE)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build()).build()
         try {
-            startForeground(1, notification)
+            // ServiceCompat omits types unavailable before Android 14.
+            ServiceCompat.startForeground(this, 1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } catch (error: Exception) {
-            // A restart can be refused after the dataSync budget is exhausted.
+            // Android can still refuse a foreground restart under background restrictions.
             recordInterruption("start_failed")
             SettingsStore(this).message = error.message ?: "Continuous sync could not start; scheduled checks remain enabled"
             stopSelf()
@@ -65,6 +68,7 @@ class SyncService : Service() {
         return START_STICKY
     }
     override fun onTimeout(startId: Int, fgsType: Int) {
+        // Defensive handling for platform changes; specialUse has no dataSync budget.
         recordInterruption("timeout")
         SettingsStore(this).message = "Android paused continuous sync after its time limit. Scheduled checks remain enabled; open the app to resume continuous sync."
         stopSelf()
