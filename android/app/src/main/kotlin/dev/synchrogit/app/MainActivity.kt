@@ -198,7 +198,7 @@ class MainActivity : ComponentActivity() {
                         store.message = if (enabled) "Scheduled synchronization enabled" else "Scheduled synchronization disabled"
                     }
                 }
-                Text("The switch also keeps scheduled checks enabled after you press Stop. Continuous mode watches local edits and uses the interval below. Scheduled checks can be delayed and do not watch edits immediately.", style = MaterialTheme.typography.bodySmall)
+                Text("The switch also keeps scheduled checks enabled after you press Stop. Continuous mode watches local edits and uses the interval below. It resumes after a phone restart and the first unlock, until you press Stop. Scheduled checks can be delayed and do not watch edits immediately.", style = MaterialTheme.typography.bodySmall)
                 interruption?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 Text(when {
                     batteryRestricted -> "Android restricts this app's background activity. Allow background use in battery settings."

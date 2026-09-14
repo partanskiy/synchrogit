@@ -3,6 +3,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Continuous sync needs a foreground service, but no drawer notifications.
          Keep dependencies from reintroducing the permission on Android 13+. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" tools:node="remove" />
@@ -19,5 +20,8 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-started continuous Git repository synchronization: watch local file changes and poll configured remotes until the user stops synchronization." />
         </service>
+        <receiver android:name=".BootReceiver" android:exported="false">
+            <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
+        </receiver>
     </application>
 </manifest>

@@ -106,6 +106,9 @@ this service. Process recovery, periodic fallback and explicit Stop are retained
 The Android 16 emulator test checks the runtime service type and continued Git
 synchronization beyond a shortened dataSync deadline, then stops the service
 externally and exercises a real scheduled Git cycle and automatic resume.
+Two emulator reboots check automatic service/watcher startup with saved intent
+and the absence of a restart after explicit Stop. Startup waits for the first
+unlock, when configuration and encrypted credentials are available.
 
 The physical Samsung was not connected when this change was developed.
 These checks do not establish prolonged unattended operation on that phone,
